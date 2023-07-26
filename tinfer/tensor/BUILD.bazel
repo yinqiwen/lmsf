@@ -1,0 +1,22 @@
+package(
+    default_visibility = ["//visibility:public"],
+)
+
+# cuda_library(
+#     name = "ngram_repeat_kernel",
+#     srcs = ["ngram_repeat_kernel.cu"],
+# )
+
+cc_library(
+    name = "tensor",
+    srcs = ["tensor.cc"],
+    hdrs = ["tensor.h"],
+    deps = [
+        "//tinfer/log",
+        "//tinfer/utils:cleanup",
+        "//tinfer/utils:cuda_allocator",
+        "//tinfer/utils:cuda_utils",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/strings",
+    ],
+)

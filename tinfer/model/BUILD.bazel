@@ -1,0 +1,85 @@
+load(
+    "//tinfer:copts/configure_copts.bzl",
+    "TINFER_DEFAULT_COPTS",
+    "TINFER_DEFAULT_LINKOPTS",
+)
+
+package(
+    default_visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "model_config",
+    srcs = ["model_config.cc"],
+    hdrs = [
+        "model_config.h",
+    ],
+    copts = TINFER_DEFAULT_COPTS,
+    deps = [
+        "//tinfer/log",
+        "//tinfer/module:params",
+        "//tinfer/utils:cuda_utils",
+        "@kcfg",
+    ],
+)
+
+cc_library(
+    name = "model_weights",
+    srcs = ["model_weights.cc"],
+    hdrs = [
+        "model_weights.h",
+    ],
+    copts = TINFER_DEFAULT_COPTS,
+    deps = [
+        ":model_config",
+        "//tinfer/log",
+        "//tinfer/utils:mem_utils",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+cc_library(
+    name = "model_task",
+    hdrs = [
+        "model_task.h",
+    ],
+    copts = TINFER_DEFAULT_COPTS,
+)
+
+cc_library(
+    name = "model",
+    srcs = ["model.cc"],
+    hdrs = [
+        "model.h",
+    ],
+    copts = TINFER_DEFAULT_COPTS,
+    deps = [
+        ":model_task",
+        ":model_weights",
+        "//tinfer/module",
+        "//tinfer/module:module_impls",
+        "//tinfer/tokenizer:bert_tokenizer",
+        "//tinfer/tokenizer:sentencepiece_tokenizer",
+    ],
+)
+
+cc_binary(
+    name = "model_test",
+    srcs = ["model_test.cc"],
+    copts = TINFER_DEFAULT_COPTS,
+    linkopts = TINFER_DEFAULT_LINKOPTS,
+    deps = [
+        ":model",
+    ],
+)
+
+cc_binary(
+    name = "model_weights_test",
+    srcs = ["model_weights_test.cc"],
+    copts = TINFER_DEFAULT_COPTS,
+    linkopts = TINFER_DEFAULT_LINKOPTS,
+    deps = [
+        ":model_weights",
+    ],
+)

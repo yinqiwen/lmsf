@@ -1,0 +1,65 @@
+load(
+    "//tinfer:copts/configure_copts.bzl",
+    "TINFER_DEFAULT_COPTS",
+)
+
+package(
+    default_visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "params",
+    srcs = ["params.cc"],
+    hdrs = [
+        "params.h",
+    ],
+    copts = TINFER_DEFAULT_COPTS,
+    deps = [
+        "//tinfer/log",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@kcfg",
+    ],
+)
+
+cc_library(
+    name = "context",
+    srcs = ["context.cc"],
+    hdrs = [
+        "context.h",
+    ],
+    copts = TINFER_DEFAULT_COPTS,
+    deps = [
+        ":params",
+        "//tinfer/model:model_task",
+        "//tinfer/model:model_weights",
+        "//tinfer/tensor",
+        "//tinfer/utils:cuda_allocator",
+    ],
+)
+
+cc_library(
+    name = "module",
+    srcs = ["module.cc"],
+    hdrs = [
+        "module.h",
+    ],
+    copts = TINFER_DEFAULT_COPTS,
+    deps = [
+        ":context",
+        "//tinfer/log",
+        "//tinfer/tensor",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/hash",
+        "@kcfg",
+    ],
+)
+
+cc_library(
+    name = "module_impls",
+    deps = [
+        "//tinfer/module/misc:build_decoder_attention_mask",
+        "//tinfer/module/misc:inputs_embedding_lookup_pos_encoding",
+        "//tinfer/module/misc:prepare_inputs",
+        "//tinfer/module/misc:tile_prompt_inputs",
+    ],
+)

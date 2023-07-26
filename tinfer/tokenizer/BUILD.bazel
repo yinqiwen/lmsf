@@ -1,0 +1,84 @@
+load("@rules_cc//cc:defs.bzl", "cc_test")
+load(
+    "//tinfer:copts/configure_copts.bzl",
+    "TINFER_DEFAULT_COPTS",
+)
+
+package(
+    default_visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "tokenizer",
+    srcs = ["tokenizer.cc"],
+    hdrs = [
+        "tokenizer.h",
+    ],
+)
+
+cc_library(
+    name = "wordpiece_tokenizer",
+    srcs = ["wordpiece_tokenizer.cc"],
+    hdrs = [
+        "wordpiece_tokenizer.h",
+    ],
+    copts = TINFER_DEFAULT_COPTS,
+    deps = [
+        ":tokenizer",
+        "//third_party/utf8",
+        # "@icu//:common",
+        "@com_google_absl//absl/container:flat_hash_map",
+    ],
+)
+
+cc_library(
+    name = "bert_tokenizer",
+    srcs = ["bert_tokenizer.cc"],
+    hdrs = [
+        "bert_tokenizer.h",
+    ],
+    copts = TINFER_DEFAULT_COPTS,
+    deps = [
+        ":tokenizer",
+        ":wordpiece_tokenizer",
+        "//tinfer/utils:regex_split",
+        "//tinfer/utils:vocab_utils",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_re2//:re2",
+    ],
+)
+
+cc_library(
+    name = "sentencepiece_tokenizer",
+    hdrs = [
+        "sentencepiece_tokenizer.h",
+    ],
+    copts = TINFER_DEFAULT_COPTS,
+    deps = [
+        ":tokenizer",
+        "@com_google_absl//absl/strings",
+        "@com_google_sentencepiece//:sentencepiece",
+    ],
+)
+
+cc_test(
+    name = "bert_tokenizer_test",
+    srcs = ["bert_tokenizer_test.cc"],
+    copts = TINFER_DEFAULT_COPTS,
+    linkopts = ["-ldl"],
+    deps = [
+        ":bert_tokenizer",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "sentencepiece_tokenizer_test",
+    srcs = ["sentencepiece_tokenizer_test.cc"],
+    copts = TINFER_DEFAULT_COPTS,
+    linkopts = ["-ldl"],
+    deps = [
+        ":sentencepiece_tokenizer",
+        "@com_google_googletest//:gtest_main",
+    ],
+)

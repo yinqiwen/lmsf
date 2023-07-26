@@ -1,0 +1,9 @@
+build --copt=-O2
+build --copt=-g
+build --cxxopt=-std=c++17
+build --action_env=LIBRARY_PATH
+build --dynamic_mode="off"
+#build --remote_cache=grpc://bazel-cache.woa.com:9090
+#build --bes_results_url=http://bazel-bes.woa.com/invocation/
+#build --bes_backend=grpc://bazel-bes.woa.com:1985
+build  --@rules_cuda//cuda:archs=compute_86:compute_86,sm_86

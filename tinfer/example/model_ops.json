@@ -1,0 +1,22 @@
+[
+    {
+        "is_layer_op": false,
+        "name": "prepare_inputs",
+        "once": false
+    },
+    {
+        "is_layer_op": false,
+        "name": "tile_prompt_inputs",
+        "once": false
+    },
+    {
+        "is_layer_op": false,
+        "name": "inputs_embedding_lookup_pos_encoding",
+        "once": false
+    },
+    {
+        "is_layer_op": false,
+        "name": "build_decoder_attention_mask",
+        "once": false
+    }
+]

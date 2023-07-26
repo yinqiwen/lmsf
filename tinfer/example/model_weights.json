@@ -1,0 +1,64 @@
+{
+    "common": {
+        "final_layernorm.bias": [
+            768
+        ],
+        "final_layernorm.weight": [
+            768
+        ],
+        "wpe": [
+            128,
+            768
+        ],
+        "wte": [
+            21128,
+            768
+        ]
+    },
+    "layers": {
+        "count": 12,
+        "weights": {
+            "attention.dense.bias": [
+                768
+            ],
+            "attention.dense.weight.0": [
+                768,
+                768
+            ],
+            "attention.query_key_value.bias.0": [
+                3,
+                768
+            ],
+            "attention.query_key_value.weight.0": [
+                768,
+                2304
+            ],
+            "input_layernorm.bias": [
+                768
+            ],
+            "input_layernorm.weight": [
+                768
+            ],
+            "mlp.dense_4h_to_h.bias": [
+                768
+            ],
+            "mlp.dense_4h_to_h.weight.0": [
+                3072,
+                768
+            ],
+            "mlp.dense_h_to_4h.bias.0": [
+                3072
+            ],
+            "mlp.dense_h_to_4h.weight.0": [
+                768,
+                3072
+            ],
+            "post_attention_layernorm.bias": [
+                768
+            ],
+            "post_attention_layernorm.weight": [
+                768
+            ]
+        }
+    }
+}

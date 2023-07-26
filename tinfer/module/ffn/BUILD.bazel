@@ -1,0 +1,31 @@
+load(
+    "//tinfer:copts/configure_copts.bzl",
+    "TINFER_DEFAULT_COPTS",
+)
+
+package(
+    default_visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "ffn_layer",
+    srcs = ["ffn_layer.cc"],
+    hdrs = [
+        "ffn_layer.h",
+        "ffn_weight.h",
+    ],
+    copts = TINFER_DEFAULT_COPTS,
+    deps = [
+        "//tinfer/kernel:activation_kernels",
+        "//tinfer/kernel:matrix_vector_multiplication",
+        "//tinfer/kernel:moe_kernels",
+        "//tinfer/kernel:transpose_int8_kernels",
+        "//tinfer/kernel/cutlass_kernels",
+        "//tinfer/module/common:base_layer",
+        "//tinfer/module/common:dense_weight",
+        "//tinfer/utils:activation_types",
+        "//tinfer/utils:cuda_allocator",
+        "//tinfer/utils:cuda_utils",
+        "//tinfer/utils:mem_utils",
+    ],
+)

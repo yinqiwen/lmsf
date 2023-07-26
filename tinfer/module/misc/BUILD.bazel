@@ -1,0 +1,51 @@
+load(
+    "//tinfer:copts/configure_copts.bzl",
+    "TINFER_DEFAULT_COPTS",
+)
+
+package(
+    default_visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "tile_prompt_inputs",
+    srcs = ["tile_prompt_inputs.cc"],
+    copts = TINFER_DEFAULT_COPTS,
+    deps = [
+        "//tinfer/kernel:gpt_kernels",
+        "//tinfer/module",
+    ],
+    alwayslink = True,
+)
+
+cc_library(
+    name = "prepare_inputs",
+    srcs = ["prepare_inputs.cc"],
+    copts = TINFER_DEFAULT_COPTS,
+    deps = [
+        "//tinfer/module",
+    ],
+    alwayslink = True,
+)
+
+cc_library(
+    name = "inputs_embedding_lookup_pos_encoding",
+    srcs = ["inputs_embedding_lookup_pos_encoding.cc"],
+    copts = TINFER_DEFAULT_COPTS,
+    deps = [
+        "//tinfer/kernel:gpt_kernels",
+        "//tinfer/module",
+    ],
+    alwayslink = True,
+)
+
+cc_library(
+    name = "build_decoder_attention_mask",
+    srcs = ["build_decoder_attention_mask.cc"],
+    copts = TINFER_DEFAULT_COPTS,
+    deps = [
+        "//tinfer/kernel:gpt_kernels",
+        "//tinfer/module",
+    ],
+    alwayslink = True,
+)
