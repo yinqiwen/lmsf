@@ -1,0 +1,39 @@
+[package]
+name = "lmsf-core"
+version = "0.1.0"
+edition = "2021"
+
+
+[dependencies]
+clap = { version = "4.1.4", features = ["derive", "env"] }
+veil = "0.1"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+tracing-appender = "0.2"
+tokio = { version = "1.0", features = ["full"] }
+serde = "1.0"
+anyhow = "1.0"
+metrics = "^0.21"
+metrics-util = "0.15"
+candle-core = { workspace = true }
+candle-kernels = { workspace = true }
+candle-nn = { workspace = true }
+candle-transformers = { workspace = true }
+half = { workspace = true }
+cudarc = { version = "0.9.14", features = ["f16"], optional = true }
+serde_json = "1.0"
+tokenizers = { version = "0.13.4", default-features = false, features = [
+    "onig",
+] }
+num = "0.4"
+num-derive = "0.4"
+num-traits = "0.2"
+paste = "1.0"
+
+vllm = { path = "../vllm" }
+tops = { path = "../tops" }
+common = { path = "../common", package = "lmsf-common" }
+
+[features]
+default = ["cuda"]
+cuda = ["candle-core/cuda"]

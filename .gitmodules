@@ -1,0 +1,3 @@
+[submodule "tensorrt_llm_kernels/tensorrt_llm_kernels_csrc/3rdparty/cutlass"]
+	path = tensorrt_llm_kernels/tensorrt_llm_kernels_csrc/3rdparty/cutlass
+	url = https://github.com/NVIDIA/cutlass.git

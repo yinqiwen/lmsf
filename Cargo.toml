@@ -1,0 +1,27 @@
+[workspace]
+members = ["core", "example", "vllm", "tops", "common"]
+resolver = "2"
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+
+[workspace.dependencies]
+clap = { version = "4.1.4", features = ["derive", "env"] }
+tracing = "0.1"
+tracing-subscriber = "0.3"
+tracing-appender = "0.2"
+tokio = { version = "1.0", features = ["full"] }
+serde = "1.0"
+anyhow = "1.0"
+metrics = "^0.21"
+metrics-util = "0.15"
+candle-core = { version = "0.3.2" }
+candle-kernels = { version = "0.3.2" }
+candle-nn = { version = "0.3.2" }
+candle-transformers = { version = "0.3.2" }
+# candle-ext = { git = "https://github.com/mokeyish/candle-ext.git", features = [
+#     "scatter",
+#     "cuda",
+# ] }
+half = "2.3.1"
+libc = "0.2"

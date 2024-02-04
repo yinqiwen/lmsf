@@ -1,0 +1,30 @@
+[package]
+name = "lmsf-example"
+version = "0.1.0"
+edition = "2021"
+
+
+[[example]]
+name = "llm_engine_example"
+
+
+[dependencies]
+minfer-core = { path = "../core", package = "lmsf-core" }
+clap = { version = "4.1.4", features = ["derive", "env"] }
+veil = "0.1"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+tracing-appender = "0.2"
+anyhow = "1.0"
+candle-core = { workspace = true }
+# candle-ext = { workspace = true }
+tops = { path = "../tops" }
+# tch = "0.14.0"
+
+
+[build-dependencies]
+anyhow = { version = "1", features = ["backtrace"] }
+
+[features]
+default = ["cuda"]
+cuda = ["candle-core/cuda"]
