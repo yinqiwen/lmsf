@@ -36,7 +36,7 @@ impl CompletionOutput {
 }
 #[derive(Debug)]
 pub struct RequestOutput {
-    request_id: u64,
+    pub request_id: u64,
     prompt: String,
     prompt_token_ids: Vec<u32>,
     prompt_logprobs: Option<Arc<PromptLogprobs>>,

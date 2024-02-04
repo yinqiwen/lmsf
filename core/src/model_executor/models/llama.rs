@@ -284,12 +284,18 @@ struct Mlp {
 }
 
 impl Mlp {
-    fn forward(&self, x: &Tensor) -> Result<Tensor> {
+    fn forward(&self, x: &Tensor, log_enable: bool) -> Result<Tensor> {
         let _enter = self.span.enter();
         let x1 = self.c_fc1.forward(x)?;
         let x2 = self.c_fc2.forward(x)?;
+        if log_enable {
+            // tracing::info!("after gateup:{}\n{}", x1.to_string(), x2.to_string());
+        }
         tops::cuda_silu_activation(&x1, &x2, std::ptr::null_mut())?;
         let x = x1;
+        // if log_enable {
+        //     tracing::info!("after cuda_silu_activation:{}", x.to_string());
+        // }
         //let x = (candle_nn::ops::silu(&x1)? * x2)?;
         // let x = candle_nn::ops::silu(&(x1 * x2)?)?;
         //let x = (candle_nn::ops::silu(&self.c_fc1.forward(x)?)? * self.c_fc2.forward(x)?)?;
@@ -358,7 +364,7 @@ impl Block {
         // tracing::info!("Block attn cost {:?}", start.elapsed(),);
         let residual = &x;
         //let x = (self.mlp.forward(&self.rms_2.forward(&x)?)? + residual)?;
-        let x = self.mlp.forward(&self.rms_2.forward(&x)?)?;
+        let x = self.mlp.forward(&self.rms_2.forward(&x)?, false)?;
         cuda_add_(&x, &residual)?;
         // cuda_dev.synchronize();
         // tracing::info!("Block mlp cost {:?}", start.elapsed(),);
@@ -426,9 +432,15 @@ impl Block2 {
             cache,
             self.idx == 0,
         )?;
-        let (hidden_states, residual) = self.rms_2.forward_residual(hidden_states, residual)?;
 
-        let hidden_states = self.mlp.forward(&hidden_states)?;
+        let (hidden_states, residual) = self.rms_2.forward_residual(hidden_states, residual)?;
+        // if self.idx == 0 {
+        //     tracing::info!("###before mlp hidden_states:{}", hidden_states.to_string());
+        // }
+        let hidden_states = self.mlp.forward(&hidden_states, self.idx == 0)?;
+        // if self.idx == 0 {
+        //     tracing::info!("###after mlp hidden_states:{}", hidden_states.to_string());
+        // }
 
         Ok((hidden_states, residual))
     }
@@ -484,7 +496,7 @@ impl Llama {
         // );
         let (_b_sz, seq_len) = x.dims2()?;
         let mut x = self.wte.forward(x)?;
-        // tracing::info!("after wte", x.to_string(),);
+        // tracing::info!("after wte:{}", x.to_string());
         // cuda_dev.synchronize();
         // tracing::info!("wte cost {:?}", start.elapsed(),);
         let mut residual: Option<Tensor> = None;
@@ -531,12 +543,13 @@ impl Llama {
         // tracing::info!("x0 shape:{:?}/{}", x.shape(), x.to_string());
         // tracing::info!("before ln_f:{:?}", x.to_string());
         //let x = self.ln_f.forward(&x)?;
+        // tracing::info!("before ln_f0:{:?}", x.to_string());
         let (x, _) = self.ln_f.forward_residual(x, residual.unwrap())?;
         // cuda_dev.synchronize();
         // tracing::info!("ln_f cost {:?}", start.elapsed(),);
-        // tracing::info!("x1 shape:{:?}", x.shape());
 
         let x = x.i((.., seq_len - 1, ..))?;
+        // tracing::info!("after ln_f1:{:?}", x.to_string());
 
         // tracing::info!("x1 shape:{:?}/{}", x.shape(), x.to_string());
         // tracing::info!("x2 shape:{:?}", x.shape());

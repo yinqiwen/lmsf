@@ -18,14 +18,14 @@ extern "C" {
 }
 
 pub fn cuda_silu_activation(a: &Tensor, b: &Tensor, stream: CUstream) -> candle_core::Result<()> {
-    let (_, num_token, inter_size) = a.dims3()?;
+    let (bsize, num_token, inter_size) = a.dims3()?;
     let a_view = common::ffi::CTensorView::from(a, false)?;
     let b_view = common::ffi::CTensorView::from(b, false)?;
     unsafe {
         fastertransformer_silu_activation(
             a_view,
             b_view,
-            num_token as i32,
+            (bsize * num_token) as i32,
             inter_size as i32,
             stream,
         );

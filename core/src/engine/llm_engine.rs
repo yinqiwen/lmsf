@@ -119,11 +119,11 @@ impl LLMEngine {
             .seq_counter
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         let seq = Sequence::new(seq_id, prompt, prompt_token_ids.get_ids(), block_size);
-        tracing::info!(
-            "##Encode:{:?}, logical_token_blocks:{}",
-            prompt_token_ids,
-            seq.logical_token_blocks.len()
-        );
+        // tracing::info!(
+        //     "##Encode:{:?}, logical_token_blocks:{}",
+        //     prompt_token_ids,
+        //     seq.logical_token_blocks.len()
+        // );
         // # Create the sequence group.
         let seq_group = SequenceGroup::new(request_id, vec![seq], sampling_params, arrival_time);
 

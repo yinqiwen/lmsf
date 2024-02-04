@@ -1,4 +1,7 @@
-use std::{collections::HashMap, ops::Mul};
+use std::{
+    collections::{BTreeMap, HashMap},
+    ops::Mul,
+};
 
 use candle_core::{DType, Device, IndexOp, Tensor, D};
 // use candle_ext::F;
@@ -27,16 +30,16 @@ fn get_bin_counts_and_mask(
     //let bin_counts = Tensor::zeros((num_seqs, vocab_size + 1), DType::I64, tokens.device())?;
     let bin_counts = cache.get(DType::I64, (num_seqs, vocab_size + 1), true)?;
     //bin_counts.scatter_add(indexes, source, dim)
-    let scatter_src = if tokens.elem_count() == 0 {
-        tokens = tokens.reshape((num_seqs, 0))?;
-        let empty: Vec<i64> = Vec::new();
-        Tensor::from_vec(empty, (num_seqs, 0), tokens.device())?
-    } else {
-        //Tensor::ones_like(&tokens)?
-        let t = cache.get(tokens.dtype(), tokens.shape(), false)?;
-        cuda_tensor_ones(&t)?;
-        t
-    };
+    // let scatter_src = if tokens.elem_count() == 0 {
+    //     tokens = tokens.reshape((num_seqs, 0))?;
+    //     let empty: Vec<i64> = Vec::new();
+    //     Tensor::from_vec(empty, (num_seqs, 0), tokens.device())?
+    // } else {
+    //     //Tensor::ones_like(&tokens)?
+    //     let t = cache.get(tokens.dtype(), tokens.shape(), false)?;
+    //     cuda_tensor_ones(&t)?;
+    //     t
+    // };
     // println!(
     //     "bin_counts :{:?}, tokens:{:?},scatter_src:{:?}",
     //     bin_counts.shape(),
@@ -45,7 +48,12 @@ fn get_bin_counts_and_mask(
     // );
     // let scatter_src = Tensor::ones_like(&tokens)?;
     //let bin_counts = bin_counts.scatter_add(&tokens, &scatter_src, 1)?;
-    cuda_scatter_add(&bin_counts, &tokens, &scatter_src, 1)?;
+    if tokens.elem_count() > 0 {
+        let scatter_src = cache.get(tokens.dtype(), tokens.shape(), false)?;
+        cuda_tensor_ones(&scatter_src)?;
+        cuda_scatter_add(&bin_counts, &tokens, &scatter_src, 1)?;
+    }
+    // cuda_scatter_add(&bin_counts, &tokens, &scatter_src, 1)?;
 
     let bin_counts = bin_counts.i((.., ..vocab_size))?;
     let mask = cache.get(DType::U8, bin_counts.shape(), false)?;
@@ -113,9 +121,20 @@ fn apply_penalties(
     let output_mask = output_mask.to_dtype(presence_penalties.dtype())?;
     // tracing::info!("apply_penalties 4 cost {:?}", start.elapsed());
 
-    let logits = logits.sub(&(frequency_penalties.matmul(&output_bin_counts)?))?;
+    let logits = logits.sub(
+        &(frequency_penalties
+            .broadcast_as(output_bin_counts.shape())?
+            .mul(&output_bin_counts)?),
+    )?;
+
     let presence_penalties = presence_penalties.unsqueeze(1)?;
-    let logits = logits.sub(&(presence_penalties.matmul(&output_mask)?))?;
+
+    let logits = logits.sub(
+        &(presence_penalties
+            .broadcast_as(output_mask.shape())?
+            .mul(&output_mask)?),
+    )?;
+
     // logits -= frequency_penalties.unsqueeze_(dim=1) * output_bin_counts
     // logits -= presence_penalties.unsqueeze_(dim=1) * output_mask
     // tracing::info!("apply_penalties all cost {:?}", start.elapsed());
@@ -510,7 +529,7 @@ fn sample(
     // tracing::info!("sampler 0 {:?}", start.elapsed());
 
     // sample_results_dict: Dict[int, Tuple[List[int], List[int]]] = {}
-    let mut sample_results_dict: HashMap<usize, (Vec<u32>, Vec<u32>)> = HashMap::new();
+    let mut sample_results_dict: BTreeMap<usize, (Vec<u32>, Vec<u32>)> = BTreeMap::new();
 
     for i in 0..SamplingType::Beam as usize {
         if let Some((seq_group_ids, seq_groups, is_prompts, sample_indices)) =
@@ -545,7 +564,7 @@ fn sample(
     // tracing::info!("sampler 1 {:?}", start.elapsed());
 
     let mut result = Vec::new();
-    for (_, v) in sample_results_dict {
+    for (i, v) in sample_results_dict {
         result.push(v);
     }
     Ok(result)
@@ -851,6 +870,7 @@ impl Sampler {
         if do_min_p {
             logits = apply_min_p(&mut self.arena, logits, sampling_tensors.min_ps)?;
         }
+
         // cuda_dev.synchronize();
         // tracing::info!("sample 2 cost {:?}", start.elapsed());
 
@@ -885,7 +905,7 @@ impl Sampler {
         // # Sample the next tokens.
         // sample_results = _sample(probs, logprobs, sampling_metadata)
         let sample_results = sample(probs, &logprobs, &sampling_metadata)?;
-
+        // tracing::info!("sample result{:?}", sample_results);
         // cuda_dev.synchronize();
         // tracing::info!("sample 5 cost {:?}", start.elapsed());
         // tracing::info!("sample:{:?}", sample_results);

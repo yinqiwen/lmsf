@@ -34,13 +34,13 @@ fn run(args: &EngineArgs) -> anyhow::Result<()> {
     // }
     let mut count = 0;
     tracing::info!("start");
-    // engine.add_request(
-    //     request_id + 1,
-    //     "To be or not to be, ",
-    //     sampling_params.clone(),
-    //     None,
-    //     arrival_time,
-    // )?;
+    engine.add_request(
+        request_id + 1,
+        "To be or not to be, ",
+        sampling_params.clone(),
+        None,
+        arrival_time,
+    )?;
     engine.add_request(
         request_id + 2,
         "To be or not to be, ",
@@ -57,33 +57,33 @@ fn run(args: &EngineArgs) -> anyhow::Result<()> {
         // }
         for req_out in outputs {
             for out in req_out.outputs {
-                tracing::info!("gen text:{}", out.text);
+                tracing::info!("{}:gen text:{}", req_out.request_id, out.text);
             }
         }
     }
     tracing::info!("End cost {:?} to gen {} tokens", start.elapsed(), count);
 
-    engine.add_request(
-        request_id + 3,
-        "To be or not to be, ",
-        sampling_params,
-        None,
-        arrival_time,
-    )?;
-    let start = std::time::Instant::now();
-    while engine.has_unfinished_requests() {
-        let outputs = engine.step()?;
-        count += 1;
-        // if count == 4 {
-        //     break;
-        // }
-        for req_out in outputs {
-            for out in req_out.outputs {
-                tracing::info!("gen text:{}", out.text);
-            }
-        }
-    }
-    tracing::info!("End cost {:?} to gen {} tokens", start.elapsed(), count);
+    // engine.add_request(
+    //     request_id + 3,
+    //     "To be or not to be, ",
+    //     sampling_params,
+    //     None,
+    //     arrival_time,
+    // )?;
+    // let start = std::time::Instant::now();
+    // while engine.has_unfinished_requests() {
+    //     let outputs = engine.step()?;
+    //     count += 1;
+    //     // if count == 4 {
+    //     //     break;
+    //     // }
+    //     for req_out in outputs {
+    //         for out in req_out.outputs {
+    //             tracing::info!("gen text:{}", out.text);
+    //         }
+    //     }
+    // }
+    // tracing::info!("End cost {:?} to gen {} tokens", start.elapsed(), count);
     Ok(())
 }
 
