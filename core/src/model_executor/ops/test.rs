@@ -132,6 +132,44 @@ fn test_empty_tesnor() {
 }
 
 #[test]
+fn test_tesnor_cat() -> candle_core::Result<()> {
+    let device = Device::new_cuda(0)?;
+    let cuda_dev = match &device {
+        Device::Cuda(c) => c,
+        _ => {
+            candle_core::bail!("unexpected")
+        }
+    };
+    let (before_free, _) =
+        candle_core::cuda_backend::cudarc::driver::result::mem_get_info().unwrap();
+    println!("before_free:{}", before_free);
+    let a = Tensor::zeros((32, 1024, 1024), DType::F32, &device)?;
+    let b = Tensor::zeros((32, 1024, 1024), DType::F32, &device)?;
+    cuda_dev.synchronize();
+    let (after_free, _) =
+        candle_core::cuda_backend::cudarc::driver::result::mem_get_info().unwrap();
+    println!("Create 2 tensors use gpu mem:{}", before_free - after_free,);
+    let c = Tensor::cat(&[&a, &b], 0)?;
+    cuda_dev.synchronize();
+    let (after_free, _) =
+        candle_core::cuda_backend::cudarc::driver::result::mem_get_info().unwrap();
+    println!(
+        "After cat 2 tensors use gpu mem:{}",
+        before_free - after_free,
+    );
+    drop(a);
+    drop(b);
+    //cuda_dev.synchronize();
+    let (after_free, _) =
+        candle_core::cuda_backend::cudarc::driver::result::mem_get_info().unwrap();
+    println!(
+        "After drop 2 tensors use gpu mem:{}",
+        before_free - after_free,
+    );
+    Ok(())
+}
+
+#[test]
 fn test_create_tesnor() -> candle_core::Result<()> {
     let v: Vec<f32> = vec![0.8, 0.9];
     let dev = candle_core::Device::Cpu;
@@ -154,12 +192,24 @@ fn test_create_tesnor() -> candle_core::Result<()> {
 #[test]
 fn test_tensor_slice() -> candle_core::Result<()> {
     let cuda_dev = Device::new_cuda(0)?;
-    let t = Tensor::ones((8, 64), DType::F32, &cuda_dev)?;
-    let t1 = t.i(0)?;
-    let data = vec![1.0_f32, 2.0, 3.0, 4.0, 5.0];
-    tops::unsafe_tensor_write(&t1, data)?;
-    println!("{:?}/{:?}", t1.shape(), t1.to_string());
-    println!("{:?}", t.to_string());
+    let t = Tensor::ones((2, 1, 12288), DType::F32, &cuda_dev)?;
+    let t1 = t.i((.., .., 0..4096))?;
+    let t2 = t.i((.., .., 4096..8192))?;
+    let t3 = t.i((.., .., 8192..))?;
+    println!(
+        "Shapes: {:?}/{:?}/{:?}/{:?}",
+        t.shape(),
+        t1.shape(),
+        t2.shape(),
+        t3.shape()
+    );
+    println!(
+        "Strides: {:?}/{:?}/{:?}/{:?}",
+        t.stride(),
+        t1.stride(),
+        t2.stride(),
+        t3.stride()
+    );
     Ok(())
 }
 

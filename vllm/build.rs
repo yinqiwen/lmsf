@@ -7,11 +7,12 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::SystemTime;
 
-const KERNEL_FILES: [&str; 4] = [
+const KERNEL_FILES: [&str; 5] = [
     "cache_kernels.cu",
     "pos_encoding_kernels.cu",
     "attention/attention_kernels.cu",
     "layernorm_kernels.cu",
+    "activation_kernels.cu",
 ];
 
 fn is_dir_modified(dir: &Path, out_modified: &Result<SystemTime, std::io::Error>) -> bool {

@@ -158,15 +158,6 @@ impl RotaryEmbedding {
         let (b_sz, seq_len, hidden_size) = query.dims3()?;
         let fwd_q = query.reshape((b_sz * seq_len, self.num_key_value_heads, self.head_size))?;
         let fwd_k = key.reshape((b_sz * seq_len, self.num_key_value_heads, self.head_size))?;
-        // // Inplace
-        // candle_rotary::apply_rotary_inplace(&fwd_q, &fwd_k, &cos, &sin, self.is_neox)?;
-
-        // tracing::info!(
-        //     "cos sin cache:{:?}, {:?}, {:?}",
-        //     self.cos_sin_cache.shape(),
-        //     query.shape(),
-        //     key.shape()
-        // );
         vllm::pos_encoding::apply_rotary_embedding(
             position,
             &fwd_q,
@@ -177,14 +168,5 @@ impl RotaryEmbedding {
         )?;
 
         Ok(())
-
-        // self.pos_encoding.rotary_embedding(
-        //     position,
-        //     query,
-        //     key,
-        //     self.head_size,
-        //     &self.cos_sin_cache,
-        //     self.is_neox,
-        // )
     }
 }

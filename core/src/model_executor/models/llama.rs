@@ -277,8 +277,9 @@ fn masked_fill(on_false: &Tensor, mask: &Tensor, on_true: f32) -> Result<Tensor>
 }
 
 struct Mlp {
-    c_fc1: crate::model_executor::layers::Linear,
-    c_fc2: crate::model_executor::layers::Linear,
+    // c_fc1: crate::model_executor::layers::Linear,
+    // c_fc2: crate::model_executor::layers::Linear,
+    gate_up: crate::model_executor::layers::Linear,
     c_proj: crate::model_executor::layers::Linear,
     span: tracing::Span,
 }
@@ -286,13 +287,22 @@ struct Mlp {
 impl Mlp {
     fn forward(&self, x: &Tensor, log_enable: bool) -> Result<Tensor> {
         let _enter = self.span.enter();
-        let x1 = self.c_fc1.forward(x)?;
-        let x2 = self.c_fc2.forward(x)?;
+        // let x1 = self.c_fc1.forward(x)?;
+        // let x2 = self.c_fc2.forward(x)?;
+        let x = self.gate_up.forward(x)?;
+        // println!("x shape:{:?}", x.shape());
+        // let dim0 = *x.dims().last().unwrap();
+        // let x1 = x.i((.., .., 0..dim0 / 2))?;
+        // let x2 = x.i((.., .., (dim0 / 2)..))?;
+        // let x1 = x.narrow(0, 0, dim0 / 2)?;
+        // let x2 = x.narrow(0, dim0 / 2, dim0 / 2)?;
         if log_enable {
             // tracing::info!("after gateup:{}\n{}", x1.to_string(), x2.to_string());
         }
-        tops::cuda_silu_activation(&x1, &x2, std::ptr::null_mut())?;
-        let x = x1;
+        let x = vllm::silu_and_mul(&x)?;
+
+        // tops::cuda_silu_activation(&x1, &x2, std::ptr::null_mut())?;
+        // let x = x1;
         // if log_enable {
         //     tracing::info!("after cuda_silu_activation:{}", x.to_string());
         // }
@@ -306,15 +316,30 @@ impl Mlp {
         let span = tracing::span!(tracing::Level::TRACE, "mlp");
         let h_size = cfg.hidden_size;
         let i_size = cfg.intermediate_size;
-        let c_fc1 =
-            crate::model_executor::layers::linear_no_bias(h_size, i_size, vb.pp("gate_proj"))?;
-        let c_fc2 =
-            crate::model_executor::layers::linear_no_bias(h_size, i_size, vb.pp("up_proj"))?;
+        let gate_up = crate::model_executor::layers::Linear::load_multi(
+            &vb,
+            h_size,
+            i_size,
+            &["gate_proj", "up_proj"],
+        )?;
+        // println!("gate_up shape:{:?}", gate_up.weight.shape());
+        // drop(gate_up);
+
+        // let c_fc1 =
+        //     crate::model_executor::layers::linear_no_bias(h_size, i_size, vb.pp("gate_proj"))?;
+        // let c_fc2 =
+        //     crate::model_executor::layers::linear_no_bias(h_size, i_size, vb.pp("up_proj"))?;
+        // println!(
+        //     "fc1/2 shape:{:?}/{:?}",
+        //     c_fc1.weight.shape(),
+        //     c_fc2.weight.shape()
+        // );
         let c_proj =
             crate::model_executor::layers::linear_no_bias(i_size, h_size, vb.pp("down_proj"))?;
         Ok(Self {
-            c_fc1,
-            c_fc2,
+            // c_fc1,
+            // c_fc2,
+            gate_up,
             c_proj,
             span,
         })
@@ -416,6 +441,7 @@ impl Block2 {
                 candle_core::bail!("")
             }
         };
+        let start = std::time::Instant::now();
         let (hidden_states, residual) = match residual {
             Some(residual) => self.rms_1.forward_residual(hidden_states, residual)?,
             None => {
@@ -424,6 +450,8 @@ impl Block2 {
                 (new_hidden_states, residual)
             }
         };
+        // cuda_dev.synchronize();
+        // tracing::info!("Block rms1 cost {:?}", start.elapsed(),);
 
         let hidden_states = self.attn.forward(
             &hidden_states,
@@ -432,16 +460,23 @@ impl Block2 {
             cache,
             self.idx == 0,
         )?;
-
+        // cuda_dev.synchronize();
+        // tracing::info!("Block attn cost {:?}", start.elapsed(),);
         let (hidden_states, residual) = self.rms_2.forward_residual(hidden_states, residual)?;
+        // cuda_dev.synchronize();
+        // tracing::info!("Block rms2 cost {:?}", start.elapsed(),);
         // if self.idx == 0 {
         //     tracing::info!("###before mlp hidden_states:{}", hidden_states.to_string());
         // }
+        cuda_dev.synchronize();
+        let start = std::time::Instant::now();
+        // tracing::info!("Block rms1 cost {:?}", start.elapsed(),);
         let hidden_states = self.mlp.forward(&hidden_states, self.idx == 0)?;
         // if self.idx == 0 {
         //     tracing::info!("###after mlp hidden_states:{}", hidden_states.to_string());
         // }
-
+        cuda_dev.synchronize();
+        tracing::info!("Block mlp cost {:?}", start.elapsed(),);
         Ok((hidden_states, residual))
     }
 

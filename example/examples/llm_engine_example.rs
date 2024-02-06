@@ -48,6 +48,13 @@ fn run(args: &EngineArgs) -> anyhow::Result<()> {
         None,
         arrival_time,
     )?;
+    // engine.add_request(
+    //     request_id + 3,
+    //     "To be or not to be, ",
+    //     sampling_params.clone(),
+    //     None,
+    //     arrival_time,
+    // )?;
     let start = std::time::Instant::now();
     while engine.has_unfinished_requests() {
         let outputs = engine.step()?;
