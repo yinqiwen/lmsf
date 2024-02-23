@@ -192,8 +192,8 @@ impl Worker {
         //Ok(logits)
         match logits.device() {
             Device::Cuda(cuda) => {
-                cuda.synchronize()?;
-                tracing::info!("modle forward cost {:?}", prepare_start.elapsed());
+                //cuda.synchronize()?;
+                // tracing::info!("modle forward cost {:?}", prepare_start.elapsed());
             }
             _ => {
                 //

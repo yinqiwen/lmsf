@@ -1,29 +1,59 @@
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-};
-
 use anyhow::{anyhow, Result};
 use metrics::atomics::AtomicU64;
+use std::{
+    collections::{HashMap, HashSet},
+    str::FromStr,
+    sync::{Arc, Mutex},
+    thread::JoinHandle,
+};
+use tokio::sync::mpsc::{self, error::TryRecvError};
+use tokio::sync::oneshot;
 
 use crate::{
-    common::tokenizer::{decode_token, detokenize_incrementally, DecodeTokenOptions},
     common::{
         config::{CacheConfig, ModelConfig, ParallelConfig, SchedulerConfig},
-        output::RequestOutput,
+        output::{CompletionOutput, RequestOutput},
         sampling_params::{EarlyStopType, SamplingParams},
         sequence::{
             SamplerOutput, Sequence, SequenceGroup, SequenceGroupMetadata, SequenceGroupOutput,
             SequenceGroupRef, SequenceOutput, SequenceRef, SequenceState,
         },
+        tokenizer::{decode_token, detokenize_incrementally, DecodeTokenOptions},
     },
-    model_executor::models::ModelFactory,
-    model_executor::models::TokenizerConfig,
+    model_executor::models::{ChatTemplate, ModelFactory, TokenizerConfig},
     sched::scheduler::{Scheduler, SchedulerOutputs},
     worker::model_worker::Worker,
 };
 
-use tokenizers::{Encoding, Tokenizer};
+use tokenizers::{processors::template::Template, Encoding, Tokenizer};
+
+pub enum LLMTaskResponseReceiver {
+    Normal(oneshot::Receiver<RequestOutput>),
+    Stream(mpsc::Receiver<RequestOutput>),
+}
+enum LLMTaskResponder {
+    Normal(oneshot::Sender<RequestOutput>),
+    Stream(mpsc::Sender<RequestOutput>),
+}
+pub enum LLMPrompt {
+    Normal(String),
+    MultiRole(Vec<HashMap<String, String>>),
+}
+impl LLMPrompt {
+    pub fn from(s: String) -> Self {
+        LLMPrompt::Normal(s)
+    }
+    pub fn multi_role(s: Vec<HashMap<String, String>>) -> Self {
+        LLMPrompt::MultiRole(s)
+    }
+}
+struct LLMTask {
+    prompt: LLMPrompt,
+    sampling_params: SamplingParams,
+    prompt_token_ids: Option<Encoding>,
+    arrival_time: std::time::Duration,
+    responder: LLMTaskResponder,
+}
 
 struct TokenizerIds {
     eos_token_id: u32,
@@ -45,10 +75,15 @@ pub struct LLMEngine {
     tokenizer_ids: TokenizerIds,
     scheduler: Scheduler,
     worker: Worker,
+    chat_template: Option<Box<dyn ChatTemplate>>,
     seq_counter: AtomicU64,
 }
 
 impl LLMEngine {
+    pub fn get_model(&self) -> &str {
+        self.model_config.dir()
+    }
+
     pub fn from(
         model_config: ModelConfig,
         cache_config: CacheConfig,
@@ -73,6 +108,10 @@ impl LLMEngine {
             model_config.inner().get_model_type(),
             tokenizer_config_filename,
         )?;
+        let chat_template = ModelFactory::get_chat_template(
+            model_config.inner().get_model_type(),
+            tokenizer_config.get_chat_template(),
+        )?;
         let tokenizer_ids = TokenizerIds::from(tokenizer_config, &tokenizer)?;
         let mut worker = Worker::from(&cache_config, model_config.clone(), &parallel_config, 0)?;
 
@@ -93,8 +132,16 @@ impl LLMEngine {
             tokenizer_ids,
             scheduler,
             worker,
+            chat_template,
             seq_counter: AtomicU64::new(0),
         })
+    }
+
+    pub fn apply_chat_template(
+        &self,
+        conversation: &Vec<HashMap<String, String>>,
+    ) -> Result<String> {
+        todo!("apply_chat_template")
     }
 
     pub fn add_request(
@@ -166,6 +213,7 @@ impl LLMEngine {
         seq_mut.prefix_offset = prefix_offset;
         seq_mut.read_offset = read_offset;
         seq_mut.output_text.push_str(new_output_text.as_str());
+        // seq_mut.latest_output_token = new_output_text.clone();
         // tracing::info!(
         //     "{},full_txt:{:?}, new_output_text:{},prefix_offset:{}, read_offset:{},output_text:{}",
         //     &seq_mut.get_token_ids().len(),
@@ -530,11 +578,243 @@ impl LLMEngine {
             .worker
             .execute_model(seq_group_metadata_list, &sched_result)?;
 
-        tracing::info!("model step exec cost {:?}", modle_start.elapsed());
+        // tracing::info!("model step exec cost {:?}", modle_start.elapsed());
         if let Some(output) = output {
             self.process_model_outputs(output, sched_result)
         } else {
             Ok(Vec::new())
         }
+    }
+
+    fn get_prompt(&self, prompt: &LLMPrompt) -> anyhow::Result<String> {
+        match prompt {
+            LLMPrompt::Normal(s) => Ok(String::from(s.as_str())),
+            LLMPrompt::MultiRole(s) => match &self.chat_template {
+                Some(template) => template.apply(s),
+                None => Err(anyhow!("empty chat template")),
+            },
+        }
+    }
+
+    pub fn add_prompt(
+        &mut self,
+        request_id: u64,
+        prompt: &LLMPrompt,
+        sampling_params: SamplingParams,
+        prompt_token_ids: Option<Encoding>,
+        arrival_time: std::time::Duration,
+    ) -> Result<()> {
+        let prompt = self.get_prompt(prompt)?;
+        println!("##prompt:{}", prompt);
+        self.add_request(
+            request_id,
+            &prompt,
+            sampling_params,
+            prompt_token_ids,
+            arrival_time,
+        )
+    }
+}
+
+fn run_engine(
+    mut engine: LLMEngine,
+    notify_sender: oneshot::Sender<()>,
+    mut receiver: mpsc::UnboundedReceiver<Option<LLMTask>>,
+) -> Result<()> {
+    let mut num_unfinished_requests = 0_usize;
+    let max_num_seqs = engine.scheduler.scheduler_config.max_num_seqs;
+    let mut task_map = HashMap::new();
+    let mut request_id = 1_u64;
+
+    let _ = notify_sender.send(());
+
+    loop {
+        while num_unfinished_requests < max_num_seqs {
+            let task = if num_unfinished_requests == 0 {
+                match receiver.blocking_recv() {
+                    Some(Some(task)) => task,
+                    Some(None) => {
+                        return Ok(());
+                    }
+                    None => {
+                        return Ok(());
+                    }
+                }
+            } else {
+                match receiver.try_recv() {
+                    Ok(Some(task)) => task,
+                    Ok(None) => {
+                        return Ok(());
+                    }
+                    Err(TryRecvError::Empty) => {
+                        break;
+                    }
+                    Err(TryRecvError::Disconnected) => {
+                        return Err(anyhow!("receiver disconnected"));
+                    }
+                }
+            };
+
+            match engine.add_prompt(
+                request_id,
+                &task.prompt,
+                task.sampling_params.clone(),
+                task.prompt_token_ids.clone(),
+                task.arrival_time,
+            ) {
+                Ok(()) => {
+                    task_map.insert(request_id, task);
+                }
+                Err(e) => {
+                    tracing::error!("Failed to add prompt:{} with error:{}", request_id, e);
+                }
+            }
+            request_id += 1;
+            num_unfinished_requests = engine.get_num_unfinished_requests();
+        }
+
+        if engine.has_unfinished_requests() {
+            let outputs = engine.step()?;
+
+            for req_out in outputs {
+                let request_id = req_out.request_id;
+                if req_out.finished {
+                    if let Some(task) = task_map.remove(&request_id) {
+                        match task.responder {
+                            LLMTaskResponder::Stream(r) => {
+                                r.blocking_send(req_out);
+                            }
+                            LLMTaskResponder::Normal(r) => {
+                                r.send(req_out);
+                            }
+                        }
+                    } else {
+                        tracing::error!("No request_id:{} found in task map", request_id);
+                    }
+                } else {
+                    if let Some(task) = task_map.get(&request_id) {
+                        match &task.responder {
+                            LLMTaskResponder::Stream(r) => {
+                                let result = r.blocking_send(req_out);
+                                // tracing::info!("#### send:{:?}", result);
+                            }
+                            _ => {}
+                        }
+                    } else {
+                        tracing::error!("No request_id:{} found in task map", request_id);
+                    }
+                }
+            }
+            num_unfinished_requests = engine.get_num_unfinished_requests();
+        }
+    }
+}
+
+struct JoinHandleWrapper {
+    h: Option<JoinHandle<()>>,
+}
+
+impl JoinHandleWrapper {
+    fn new(h: JoinHandle<()>) -> Arc<Self> {
+        Arc::new(Self { h: Some(h) })
+    }
+}
+
+impl Drop for JoinHandleWrapper {
+    fn drop(&mut self) {
+        match self.h.take() {
+            Some(h) => {
+                h.join();
+            }
+            _ => {}
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct AsyncLLMEngine {
+    model: String,
+    sender: mpsc::UnboundedSender<Option<LLMTask>>,
+    runner: Arc<JoinHandleWrapper>,
+}
+
+impl Drop for AsyncLLMEngine {
+    fn drop(&mut self) {
+        let _ = self.sender.send(None);
+    }
+}
+
+impl AsyncLLMEngine {
+    pub async fn new(
+        model_config: ModelConfig,
+        cache_config: CacheConfig,
+        parallel_config: ParallelConfig,
+        scheduler_config: SchedulerConfig,
+    ) -> Self {
+        let (notify_sender, notify_rx) = oneshot::channel::<()>();
+        let (s, receiver) = mpsc::unbounded_channel();
+        let model = String::from(model_config.dir());
+        let h: JoinHandle<()> = std::thread::spawn(|| {
+            match LLMEngine::from(
+                model_config,
+                cache_config,
+                parallel_config,
+                scheduler_config,
+            ) {
+                Ok(engine) => {
+                    if let Err(e) = run_engine(engine, notify_sender, receiver) {
+                        tracing::error!("run_engine error:{}", e);
+                    }
+                }
+                Err(e) => {
+                    tracing::error!("create engine failed:{}", e);
+                }
+            }
+        });
+        let _ = notify_rx.await;
+        Self {
+            model,
+            sender: s,
+            runner: JoinHandleWrapper::new(h),
+        }
+    }
+
+    pub fn model(&self) -> &str {
+        &self.model
+    }
+
+    pub fn add(
+        &self,
+        prompt: LLMPrompt,
+        sampling_params: SamplingParams,
+        stream: bool,
+    ) -> Result<LLMTaskResponseReceiver> {
+        let (recv, responder) = if stream {
+            let (s, r) = mpsc::channel::<RequestOutput>(16);
+            (
+                LLMTaskResponseReceiver::Stream(r),
+                LLMTaskResponder::Stream(s),
+            )
+        } else {
+            let (s, r) = oneshot::channel::<RequestOutput>();
+            (
+                LLMTaskResponseReceiver::Normal(r),
+                LLMTaskResponder::Normal(s),
+            )
+        };
+        let arrival_time = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap();
+        let task = LLMTask {
+            prompt,
+            sampling_params,
+            prompt_token_ids: None,
+            arrival_time,
+            responder,
+        };
+        self.sender
+            .send(Some(task))
+            .map_err(|e| anyhow!("add llm task:{}", e))?;
+        Ok(recv)
     }
 }

@@ -10,5 +10,6 @@ extern crate num;
 extern crate num_derive;
 
 pub use common::config::EngineArgs;
+pub use common::output::{CompletionOutput, RequestOutput};
 pub use common::sampling_params::SamplingParams;
-pub use engine::llm_engine::LLMEngine;
+pub use engine::llm_engine::{AsyncLLMEngine, LLMEngine, LLMPrompt, LLMTaskResponseReceiver};

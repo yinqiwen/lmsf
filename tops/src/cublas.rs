@@ -23,6 +23,7 @@ extern "C" {
 pub struct CublasWrapper {
     wrapper: *mut c_void,
 }
+unsafe impl Send for CublasWrapper {}
 impl Drop for CublasWrapper {
     fn drop(&mut self) {
         unsafe {

@@ -52,7 +52,7 @@ impl SchedulerOutputs {
 }
 
 pub struct Scheduler {
-    scheduler_config: SchedulerConfig,
+    pub(crate) scheduler_config: SchedulerConfig,
     cache_config: CacheConfig,
     block_manager: BlockSpaceManager,
     prompt_limit: usize,

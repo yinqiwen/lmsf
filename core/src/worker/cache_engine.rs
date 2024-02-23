@@ -27,6 +27,7 @@ pub(super) struct CacheEngine {
     num_gpu_blocks: usize,
     num_cpu_blocks: usize,
 }
+unsafe impl Send for CacheEngine {}
 
 impl CacheEngine {
     pub fn new(
@@ -151,8 +152,8 @@ impl CacheEngine {
                 &self.cuda_device,
             )?;
 
-            let (free, total) = candle_core::cuda_backend::cudarc::driver::result::mem_get_info()?;
-            tracing::info!("After init_cache, GPU free:{} bytes, total:{}", free, total);
+            // let (free, total) = candle_core::cuda_backend::cudarc::driver::result::mem_get_info()?;
+            // tracing::info!("After init_cache, GPU free:{} bytes, total:{}", free, total);
             gpu_cache.push((key_blocks, value_blocks));
         }
         Ok(gpu_cache)

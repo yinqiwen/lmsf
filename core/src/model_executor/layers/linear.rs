@@ -3,7 +3,6 @@ use std::sync::Arc;
 use candle_core::IndexOp;
 use candle_core::{CudaDevice, DType, Device, Tensor, D};
 use candle_nn::Module;
-// use cudarc::nccl::safe::{Comm, ReduceOp};
 use candle_nn::VarBuilder;
 use std::rc::Rc;
 
@@ -20,8 +19,6 @@ impl Linear {
         out_dim: usize,
         prefixes: &[&str],
     ) -> candle_core::Result<Self> {
-        // let rank = comm.rank();
-        // let size = comm.world_size();
         let init_ws = candle_nn::init::DEFAULT_KAIMING_NORMAL;
         let first_tensor =
             vb.pp(prefixes[0])
@@ -39,26 +36,6 @@ impl Linear {
                 drop(t);
             }
         }
-
-        // let weights: Vec<Tensor> = prefixes
-        //     .iter()
-        //     .map(|p| {
-        //         vb.pp(p)
-        //             .get_with_hints((out_dim, in_dim), "weight", init_ws)
-        //     })
-        //     .collect::<candle_core::Result<Vec<_>>>()?;
-        //let weight = Tensor::zeros((out_dim * 2, in_dim), DType::F16, &Device::new_cuda(0)?)?;
-        //println!("dtype:{:?}", weights[0].dtype());
-        // let weight = Tensor::cat(&weights, 0)?;
-        // drop(weights);
-        // match weight.device() {
-        //     Device::Cuda(cuda_dev) => {
-        //         cuda_dev.synchronize();
-        //     }
-        //     _ => {
-        //         //
-        //     }
-        // }
 
         let cublas =
             tops::CublasWrapper::new(weight.device(), weight.dtype(), std::ptr::null_mut())?;
@@ -225,11 +202,18 @@ impl QKVLinear {
 }
 
 impl QKVLinear {
-    fn forward(&self, x: &Tensor) -> candle_core::Result<(Tensor, Tensor, Tensor)> {
+    pub fn forward(
+        &self,
+        x: &Tensor,
+        // debug_file: Option<&str>,
+    ) -> candle_core::Result<(Tensor, Tensor, Tensor)> {
         let result = self.linear.forward(x)?;
+        // if debug_file.is_some() {
+        //     result.save_safetensors("qkv", debug_file.unwrap());
+        // }
         let q = result.i((.., .., 0..self.q_size))?;
-        let k = result.i((.., .., self.q_size..self.q_size + self.k_size))?;
-        let v = result.i((.., .., self.q_size + self.k_size..))?;
+        let k = result.i((.., .., self.q_size..(self.q_size + self.k_size)))?;
+        let v = result.i((.., .., (self.q_size + self.k_size)..))?;
         Ok((q, k, v))
     }
 }

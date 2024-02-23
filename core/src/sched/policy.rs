@@ -2,7 +2,7 @@ use anyhow::{anyhow, Result};
 use std::{collections::VecDeque, sync::Arc, time::Duration};
 
 use crate::common::sequence::{SequenceGroup, SequenceGroupRef};
-pub trait Policy {
+pub trait Policy: Send + Sync {
     fn get_priority(&self, now: Duration, seq_group: &SequenceGroup) -> usize;
 
     fn sort_by_priority(&self, now: Duration, seq_groups: &mut VecDeque<SequenceGroupRef>) {

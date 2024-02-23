@@ -6,9 +6,9 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use crate::model_executor::input_metadata::InputMetadata;
-use crate::model_executor::layers::{PagedAttention, RotaryEmbedding};
-
 use crate::model_executor::layers::Cache;
+use crate::model_executor::layers::{PagedAttention, QKVLinear, RotaryEmbedding};
+use crate::model_executor::models::Model;
 use crate::tensor::cuda_add_;
 
 pub const MAX_SEQ_LEN: usize = 4096;
@@ -114,9 +114,10 @@ impl RmsNorm {
 }
 
 struct CausalSelfAttention {
-    q_proj: Linear,
-    k_proj: Linear,
-    v_proj: Linear,
+    // q_proj: Linear,
+    // k_proj: Linear,
+    // v_proj: Linear,
+    qkv_proj: QKVLinear,
     o_proj: Linear,
     num_attention_heads: usize,
     num_key_value_heads: usize,
@@ -153,10 +154,12 @@ impl CausalSelfAttention {
         log_enable: bool,
     ) -> Result<Tensor> {
         let _enter = self.span.enter();
-        let (b_sz, seq_len, hidden_size) = x.dims3()?;
-        let mut q = self.q_proj.forward(x)?; //[batch_size, seq_len, num_heads * head_size]
-        let mut k = self.k_proj.forward(x)?; //[batch_size, seq_len, num_heads * head_size]
-        let v = self.v_proj.forward(x)?; //[batch_size, seq_len, num_heads * head_size]
+        // let (b_sz, seq_len, hidden_size) = x.dims3()?;
+        // let mut q = self.q_proj.forward(x)?; //[batch_size, seq_len, num_heads * head_size]
+        // let mut k = self.k_proj.forward(x)?; //[batch_size, seq_len, num_heads * head_size]
+        // let v = self.v_proj.forward(x)?; //[batch_size, seq_len, num_heads * head_size]
+        //let debug_file = if log_enable { Some("test_qkv") } else { None };
+        let (q, k, v) = self.qkv_proj.forward(x)?;
 
         // let mut q = q
         //     .reshape((b_sz, seq_len, self.num_attention_heads, self.head_dim))?
@@ -177,11 +180,37 @@ impl CausalSelfAttention {
         //rotary_emb accept shape [batch_size, seq_len, num_heads * head_size]
         if log_enable {
             // tracing::info!("before rotary_emb: positions:{}", positions.to_string());
-            // tracing::info!("before rotary_emb: q:{}", q.to_string());
-            // tracing::info!("before rotary_emb: k:{}", k.to_string());
+            // tracing::info!(
+            //     "before rotary_emb: q:{}/ {:?}/{:?}",
+            //     q.to_string(),
+            //     q.shape(),
+            //     q.stride()
+            // );
+            // tracing::info!(
+            //     "before rotary_emb: k:{}/{:?}/{:?}",
+            //     k.to_string(),
+            //     k.shape(),
+            //     k.stride()
+            // );
+            // tracing::info!(
+            //     "before rotary_emb: v:{}/{:?}/{:?}",
+            //     v.to_string(),
+            //     v.shape(),
+            //     v.stride()
+            // );
+            // tracing::info!(
+            //     "before rotary_emb: cos_sin_cache:{:?}",
+            //     self.rotary_emb.cos_sin_cache.to_string(),
+            // );
             // todo!("aaa");
         }
-        self.rotary_emb.forward(positions, &mut q, &mut k)?;
+        self.rotary_emb.forward(positions, &q, &k)?;
+        if log_enable {
+            // tracing::info!("before rotary_emb: positions:{}", positions.to_string());
+            // tracing::info!("after rotary_emb: q:{}", q.to_string());
+            // tracing::info!("after rotary_emb: k:{}", k.to_string());
+            // todo!("aaa");
+        }
 
         if log_enable {
             // tracing::info!("after rotary_emb: q:{}", q.to_string());
@@ -230,16 +259,21 @@ impl CausalSelfAttention {
         let size_in = cfg.hidden_size;
         let size_q = (cfg.hidden_size / cfg.num_attention_heads) * cfg.num_attention_heads;
         let size_kv = (cfg.hidden_size / cfg.num_attention_heads) * cfg.num_key_value_heads;
-        let q_proj = linear(size_in, size_q, vb.pp("q_proj"))?;
-        let k_proj = linear(size_in, size_kv, vb.pp("k_proj"))?;
-        let v_proj = linear(size_in, size_kv, vb.pp("v_proj"))?;
+        // let q_proj = linear(size_in, size_q, vb.pp("q_proj"))?;
+        // let k_proj = linear(size_in, size_kv, vb.pp("k_proj"))?;
+        // let v_proj = linear(size_in, size_kv, vb.pp("v_proj"))?;
+        let qkv_proj = QKVLinear::load_qkv(
+            &vb, size_in, size_q, "q_proj", size_kv, "k_proj", size_kv, "v_proj",
+        )?;
+
         let o_proj = linear(size_q, size_in, vb.pp("o_proj"))?;
 
         let head_dim = cfg.hidden_size / cfg.num_attention_heads;
         Ok(Self {
-            q_proj,
-            k_proj,
-            v_proj,
+            // q_proj,
+            // k_proj,
+            // v_proj,
+            qkv_proj,
             o_proj,
             num_attention_heads: cfg.num_attention_heads,
             num_key_value_heads: cfg.num_key_value_heads,
@@ -435,13 +469,13 @@ impl Block2 {
         cache: Option<(&Tensor, &Tensor)>,
         input_metadata: &mut InputMetadata,
     ) -> Result<(Tensor, Tensor)> {
-        let cuda_dev = match hidden_states.device() {
-            Device::Cuda(cuda) => cuda.clone(),
-            _ => {
-                candle_core::bail!("")
-            }
-        };
-        let start = std::time::Instant::now();
+        // let cuda_dev = match hidden_states.device() {
+        //     Device::Cuda(cuda) => cuda.clone(),
+        //     _ => {
+        //         candle_core::bail!("")
+        //     }
+        // };
+        // let start = std::time::Instant::now();
         let (hidden_states, residual) = match residual {
             Some(residual) => self.rms_1.forward_residual(hidden_states, residual)?,
             None => {
@@ -468,15 +502,15 @@ impl Block2 {
         // if self.idx == 0 {
         //     tracing::info!("###before mlp hidden_states:{}", hidden_states.to_string());
         // }
-        cuda_dev.synchronize();
+        // cuda_dev.synchronize();
         let start = std::time::Instant::now();
         // tracing::info!("Block rms1 cost {:?}", start.elapsed(),);
         let hidden_states = self.mlp.forward(&hidden_states, self.idx == 0)?;
         // if self.idx == 0 {
         //     tracing::info!("###after mlp hidden_states:{}", hidden_states.to_string());
         // }
-        cuda_dev.synchronize();
-        tracing::info!("Block mlp cost {:?}", start.elapsed(),);
+        // cuda_dev.synchronize();
+        // tracing::info!("Block mlp cost {:?}", start.elapsed(),);
         Ok((hidden_states, residual))
     }
 
@@ -510,7 +544,7 @@ pub struct Llama {
 }
 
 impl Llama {
-    pub fn forward(
+    pub fn do_forward(
         &self,
         x: &Tensor,
         positions: &Tensor,
@@ -609,5 +643,23 @@ impl Llama {
             ln_f,
             lm_head,
         })
+    }
+}
+
+impl Model for Llama {
+    fn forward(
+        &mut self,
+        input_tokens: Tensor,
+        input_positions: Tensor,
+        kv_cache: Option<&Vec<(Tensor, Tensor)>>,
+        mut input_metadata: InputMetadata,
+    ) -> anyhow::Result<candle_core::Tensor> {
+        self.do_forward(
+            &input_tokens,
+            &input_positions,
+            kv_cache,
+            &mut input_metadata,
+        )
+        .map_err(|e| anyhow::anyhow!("{}", e))
     }
 }

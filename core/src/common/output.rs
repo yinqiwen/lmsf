@@ -2,20 +2,22 @@ use std::sync::Arc;
 
 use super::sequence::{PromptLogprobs, SampleLogprobs, SequenceGroup, SequenceState};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CompletionOutput {
-    index: usize,
+    pub index: usize,
     pub text: String,
-    token_ids: Vec<u32>,
+    pub latest_token: String,
+    pub token_ids: Vec<u32>,
     cumulative_logprob: f32,
     logprobs: Option<SampleLogprobs>,
-    finish_reason: Option<&'static str>,
+    pub finish_reason: Option<&'static str>,
 }
 
 impl CompletionOutput {
     pub fn new(
         index: usize,
         text: String,
+        latest_token: String,
         token_ids: Vec<u32>,
         cumulative_logprob: f32,
         logprobs: Option<SampleLogprobs>,
@@ -24,6 +26,7 @@ impl CompletionOutput {
         Self {
             index,
             text,
+            latest_token,
             token_ids,
             cumulative_logprob,
             logprobs,
@@ -33,15 +36,22 @@ impl CompletionOutput {
     pub fn finished(&self) -> bool {
         self.finish_reason.is_some()
     }
+
+    pub fn get_finish_reason(&self) -> Option<String> {
+        match self.finish_reason {
+            Some(s) => Some(String::from(s)),
+            None => None,
+        }
+    }
 }
 #[derive(Debug)]
 pub struct RequestOutput {
     pub request_id: u64,
-    prompt: String,
-    prompt_token_ids: Vec<u32>,
-    prompt_logprobs: Option<Arc<PromptLogprobs>>,
+    pub prompt: String,
+    pub prompt_token_ids: Vec<u32>,
+    pub prompt_logprobs: Option<Arc<PromptLogprobs>>,
     pub outputs: Vec<CompletionOutput>,
-    finished: bool,
+    pub(crate) finished: bool,
 }
 
 impl RequestOutput {
@@ -88,9 +98,11 @@ impl RequestOutput {
             };
 
             let finshed_reason = seq.get_state().get_finished_reason();
+            let latest_token_idx = seq.gen_texts.len() - 1;
             let output = CompletionOutput::new(
                 idx,
                 seq.output_text.clone(),
+                seq.gen_texts[latest_token_idx].clone(),
                 Vec::from(seq.get_output_token_ids()),
                 seq.get_cumulative_logprob(),
                 logprobs,

@@ -1,3 +1,5 @@
+use candle_core::safetensors::MmapedSafetensors;
+use candle_core::IndexOp;
 use candle_core::{DType, Device, Tensor, D};
 use std::clone;
 use std::sync::Arc;
@@ -39,7 +41,7 @@ pub struct RotaryEmbedding {
     // cos_sin_cache: Tensor,
     // cos: Tensor,
     // sin: Tensor,
-    cos_sin_cache: Arc<Tensor>,
+    pub(crate) cos_sin_cache: Arc<Tensor>,
 }
 
 // fn compute_cos_sin_cache(
@@ -119,49 +121,19 @@ impl RotaryEmbedding {
     pub fn forward(
         &self,
         position: &Tensor,
-        query: &mut Tensor,
-        key: &mut Tensor,
+        query: &Tensor,
+        key: &Tensor,
     ) -> candle_core::Result<()> {
-        // let num_tokens = (query.elem_count() / query.shape().dims().last().unwrap()) as i32;
-        // //   int64_t num_tokens = query.numel() / query.size(-1);
-        // let rot_dim = self.cos_sin_cache.shape().dims()[1] as i32;
-        // //   int rot_dim = cos_sin_cache.size(1);
-        // let num_heads = (query.shape().dims().last().unwrap() / self.head_size) as i32;
-        // //   int num_heads = query.size(-1) / head_size;
-        // let num_kv_heads = (key.shape().dims().last().unwrap() / self.head_size) as i32;
-        // //   int num_kv_heads = key.size(-1) / head_size;
-        // let query_strides = query.stride();
-        // let query_stride = query_strides[query_strides.len() - 2] as i64;
-        // //   int64_t query_stride = query.stride(-2);
-        // let key_strides = key.stride();
-        // let key_stride = key_strides[key_strides.len() - 2] as i64;
-        // let params = vllm_kernels::RotaryEmbeddingKernelParams {
-        //     stream: std::ptr::null_mut(),
-        //     scalar_type: vllm_kernels::get_scalar_type(query.dtype()),
-        //     is_neox: self.is_neox,
-        //     query_stride,
-        //     key_stride,
-        //     num_tokens,
-        //     rot_dim,
-        //     num_heads,
-        //     num_kv_heads,
-        //     head_size: self.head_size as i32,
-        // };
-        // vllm_kernels::rotary_embedding_tensor(position, query, key, &self.cos_sin_cache, params)?;
-        // Filter cos and sin
-        // let (b_sz, seq_len) = position.dims2()?;
-        // let select_pos = position.reshape(b_sz * seq_len)?;
-        // let cos = self.cos.index_select(&select_pos, 0)?;
-        // let sin = self.sin.index_select(&select_pos, 0)?;
-
         // // q,k shape  //[batch_size, seq_len, num_heads * head_size]
         let (b_sz, seq_len, hidden_size) = query.dims3()?;
-        let fwd_q = query.reshape((b_sz * seq_len, self.num_key_value_heads, self.head_size))?;
-        let fwd_k = key.reshape((b_sz * seq_len, self.num_key_value_heads, self.head_size))?;
+        // let fwd_q = query.reshape((b_sz * seq_len, self.num_key_value_heads, self.head_size))?;
+        // let fwd_k = key.reshape((b_sz * seq_len, self.num_key_value_heads, self.head_size))?;
         vllm::pos_encoding::apply_rotary_embedding(
             position,
-            &fwd_q,
-            &fwd_k,
+            // &fwd_q,
+            // &fwd_k,
+            query,
+            key,
             &self.cos_sin_cache.as_ref(),
             self.head_size,
             self.is_neox,
@@ -169,4 +141,23 @@ impl RotaryEmbedding {
 
         Ok(())
     }
+}
+
+#[test]
+fn test_() -> candle_core::Result<()> {
+    let cuda_dev = Device::new_cuda(0)?;
+    let st = unsafe { MmapedSafetensors::new("/data/dev/rust/lmsf/test_qkv")? };
+    let qkv = st.load("qkv", &cuda_dev)?;
+    let q = qkv.i((.., .., 0..4096))?;
+    let k = qkv.i((.., .., 4096..8192))?;
+    let v = qkv.i((.., .., 8192..))?;
+    println!("before q:{}", q.to_string());
+    println!("before k:{}", k.to_string());
+    let position = Tensor::from_slice(&[9_i64], (1, 1), &cuda_dev)?;
+    let rotary_emb =
+        RotaryEmbedding::new(&cuda_dev, DType::F16, 128, 4096, 128, 4096, 10000.0, true)?;
+    rotary_emb.forward(&position, &q, &k)?;
+    println!("after q:{}", q.to_string());
+    println!("after k:{}", k.to_string());
+    Ok(())
 }

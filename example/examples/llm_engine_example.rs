@@ -1,8 +1,52 @@
+use std::io::Write;
+
 use clap::{Parser, ValueEnum};
 
-use minfer_core::EngineArgs;
-use minfer_core::LLMEngine;
-use minfer_core::SamplingParams;
+use lmsf_core::{
+    AsyncLLMEngine, EngineArgs, LLMEngine, LLMPrompt, LLMTaskResponseReceiver, SamplingParams,
+};
+
+async fn async_run(args: &EngineArgs) -> anyhow::Result<()> {
+    let (model_cfg, cache_cfg, parallel_cfg, sched_cfg) = args.create_engine_configs()?;
+    let runner = AsyncLLMEngine::new(model_cfg, cache_cfg, parallel_cfg, sched_cfg).await;
+    let mut sampling_params = SamplingParams::default();
+    sampling_params.temperature = 0.8;
+    sampling_params.top_k = 5;
+    sampling_params.presence_penalty = 0.2;
+    sampling_params.max_tokens = 128;
+    let prompt = "To be or not to be, ".to_string();
+    let prompt = LLMPrompt::from(prompt);
+    let receiver = runner.add(prompt, sampling_params, true)?;
+    match receiver {
+        LLMTaskResponseReceiver::Normal(rx) => {
+            if let Ok(output) = rx.await {
+                for output in output.outputs {
+                    //tracing::info!("gen text:{}", output.text);
+                    print!("{}", output.latest_token);
+                    std::io::stdout().flush();
+                }
+            }
+        }
+        LLMTaskResponseReceiver::Stream(mut rx) => {
+            tracing::info!("stream");
+            loop {
+                match rx.recv().await {
+                    Some(result) => {
+                        for output in result.outputs {
+                            print!("{}", output.latest_token);
+                            std::io::stdout().flush();
+                        }
+                    }
+                    None => {
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    println!("\nExit!");
+    Ok(())
+}
 
 fn run(args: &EngineArgs) -> anyhow::Result<()> {
     let (model_cfg, cache_cfg, parallel_cfg, sched_cfg) = args.create_engine_configs()?;
@@ -41,13 +85,13 @@ fn run(args: &EngineArgs) -> anyhow::Result<()> {
         None,
         arrival_time,
     )?;
-    engine.add_request(
-        request_id + 2,
-        "To be or not to be, ",
-        sampling_params.clone(),
-        None,
-        arrival_time,
-    )?;
+    // engine.add_request(
+    //     request_id + 2,
+    //     "To be or not to be, ",
+    //     sampling_params.clone(),
+    //     None,
+    //     arrival_time,
+    // )?;
     // engine.add_request(
     //     request_id + 3,
     //     "To be or not to be, ",
@@ -94,10 +138,14 @@ fn run(args: &EngineArgs) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let args = EngineArgs::parse();
     tracing_subscriber::fmt::init();
-    if let Err(e) = run(&args) {
+    // if let Err(e) = run(&args) {
+    //     tracing::error!("{}", e);
+    // }
+    if let Err(e) = async_run(&args).await {
         tracing::error!("{}", e);
     }
 }

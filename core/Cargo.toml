@@ -5,23 +5,25 @@ edition = "2021"
 
 
 [dependencies]
-clap = { version = "4.1.4", features = ["derive", "env"] }
+clap = { workspace = true }
 veil = "0.1"
-tracing = "0.1"
-tracing-subscriber = "0.3"
-tracing-appender = "0.2"
-tokio = { version = "1.0", features = ["full"] }
-serde = "1.0"
-anyhow = "1.0"
-metrics = "^0.21"
-metrics-util = "0.15"
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+tracing-appender = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+anyhow = { workspace = true }
+metrics = { workspace = true }
 candle-core = { workspace = true }
 candle-kernels = { workspace = true }
 candle-nn = { workspace = true }
 candle-transformers = { workspace = true }
 half = { workspace = true }
+minijinja = { workspace = true }
+uuid = { workspace = true }
 cudarc = { version = "0.9.14", features = ["f16"], optional = true }
-serde_json = "1.0"
+serde_json = { workspace = true }
+
 tokenizers = { version = "0.13.4", default-features = false, features = [
     "onig",
 ] }

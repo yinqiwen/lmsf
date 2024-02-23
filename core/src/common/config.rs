@@ -4,7 +4,7 @@ use anyhow::{anyhow, Result};
 use candle_core::DType;
 use clap::Parser;
 
-use crate::model_executor::models::{ModelFactory, PretrainedModelConfig};
+use crate::model_executor::models::{ModelConfig as PretrainedModelConfig, ModelFactory};
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]

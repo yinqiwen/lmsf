@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use crate::model_executor::input_metadata::InputMetadata;
 
-pub trait PretrainedModelConfig: std::fmt::Debug + Send + Sync {
+pub trait ModelConfig: std::fmt::Debug + Send + Sync {
     fn get_dtype(&self) -> Result<DType>;
     fn get_model_type(&self) -> &str;
     fn num_attention_heads(&self) -> usize;
@@ -22,9 +22,10 @@ pub trait PretrainedModelConfig: std::fmt::Debug + Send + Sync {
 
 pub trait TokenizerConfig: std::fmt::Debug + Send + Sync {
     fn get_eos_token(&self) -> &str;
+    fn get_chat_template(&self) -> Option<&str>;
 }
 
-pub trait Model {
+pub trait Model: Send {
     fn forward(
         &mut self,
         input_tokens: Tensor,

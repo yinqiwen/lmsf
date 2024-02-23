@@ -5,9 +5,7 @@ use candle_core::Tensor;
 use crate::model_executor::input_metadata::InputMetadata;
 
 use super::llama::Llama;
-use super::model::Model;
-use super::model::PretrainedModelConfig;
-use super::model::TokenizerConfig;
+use crate::model_executor::models::{Model, ModelConfig, TokenizerConfig};
 
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
 struct LlamaEosTokenConfig {
@@ -20,10 +18,14 @@ struct LlamaEosTokenConfig {
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
 pub(crate) struct LlamaTokenizerConfig {
     eos_token: LlamaEosTokenConfig,
+    chat_template: Option<String>,
 }
 impl TokenizerConfig for LlamaTokenizerConfig {
     fn get_eos_token(&self) -> &str {
         &self.eos_token.content
+    }
+    fn get_chat_template(&self) -> Option<&str> {
+        self.chat_template.as_ref().map(|s| s.as_str())
     }
 }
 
@@ -47,7 +49,7 @@ pub(crate) struct LlamaConfig {
     vocab_size: u32,
 }
 
-impl PretrainedModelConfig for LlamaConfig {
+impl ModelConfig for LlamaConfig {
     fn get_dtype(&self) -> Result<DType> {
         match self.torch_dtype.as_str() {
             "float16" | "half" => Ok(DType::F16),
@@ -69,28 +71,5 @@ impl PretrainedModelConfig for LlamaConfig {
     }
     fn num_hidden_layers(&self) -> usize {
         self.num_hidden_layers
-    }
-}
-
-pub(crate) struct LlamaModel {
-    pub(crate) llama: Llama,
-}
-
-impl Model for LlamaModel {
-    fn forward(
-        &mut self,
-        input_tokens: Tensor,
-        input_positions: Tensor,
-        kv_cache: Option<&Vec<(Tensor, Tensor)>>,
-        mut input_metadata: InputMetadata,
-    ) -> anyhow::Result<candle_core::Tensor> {
-        self.llama
-            .forward(
-                &input_tokens,
-                &input_positions,
-                kv_cache,
-                &mut input_metadata,
-            )
-            .map_err(|e| anyhow!("{}", e))
     }
 }

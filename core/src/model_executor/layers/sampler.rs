@@ -148,13 +148,13 @@ fn apply_top_p_top_k(
     k: Tensor,
 ) -> candle_core::Result<Tensor> {
     //let logits_sort = logits;
-    let cuda_dev = match logits.device() {
-        Device::Cuda(cuda) => cuda.clone(),
-        _ => {
-            candle_core::bail!("")
-        }
-    };
-    cuda_dev.synchronize();
+    // let cuda_dev = match logits.device() {
+    //     Device::Cuda(cuda) => cuda.clone(),
+    //     _ => {
+    //         candle_core::bail!("")
+    //     }
+    // };
+    //cuda_dev.synchronize();
     let start = std::time::Instant::now();
     let dim = logits.shape().dims().len() - 1;
 
@@ -920,7 +920,7 @@ impl Sampler {
             prompt_logprobs,
             sample_logprobs,
         )?;
-        tracing::info!("sample forward cost {:?}", start.elapsed());
+        // tracing::info!("sample forward cost {:?}", start.elapsed());
         Ok(Some(result))
     }
 }

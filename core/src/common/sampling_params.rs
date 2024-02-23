@@ -70,7 +70,7 @@ impl Default for SamplingParams {
             stop_token_ids: None,
             include_stop_str_in_output: false,
             ignore_eos: false,
-            max_tokens: 16,
+            max_tokens: 128,
             logprobs: None,
             prompt_logprobs: None,
             skip_special_tokens: true,

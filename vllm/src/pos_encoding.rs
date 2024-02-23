@@ -94,20 +94,28 @@ pub fn apply_rotary_embedding(
     //   int num_kv_heads = key.size(-1) / head_size;
     //   int64_t query_stride = query.stride(-2);
     //   int64_t key_stride = key.stride(-2);
-    let (num_tokens, num_heads, head_size) = query.shape().dims3()?;
-    let (num_tokens_kv, num_kv_heads, head_size_kv) = key.shape().dims3()?;
 
     // let query_last_size = *query.dims().last().unwrap();
     // let num_tokens = query.elem_count() / query_last_size;
-    let rot_dim = cos_sin_cache.dims()[1];
     // let num_heads = query_last_size / head_size;
     // let num_kv_heads = *key.dims().last().unwrap();
-    // let query_strides = query.stride();
-    // let query_stride = query_strides[query_strides.len() - 2] * 3;
-    // let key_strides = key.stride();
-    // let key_stride = key_strides[key_strides.len() - 2] * 3;
-    let query_stride = query.stride()[0];
-    let key_stride = key.stride()[0];
+    let query_strides = query.stride();
+    let query_stride = query_strides[query_strides.len() - 2];
+    let key_strides = key.stride();
+    let key_stride: usize = key_strides[key_strides.len() - 2];
+
+    let rot_dim = cos_sin_cache.dims()[1];
+    let (_, _, query_last_size) = query.shape().dims3()?;
+    let num_tokens = query.elem_count() / query_last_size;
+    let num_heads = query_last_size / head_size;
+    let num_kv_heads = *key.dims().last().unwrap() / head_size;
+    // let query_stride = query.stride()[0];
+    // let key_stride = key.stride()[0];
+
+    // let (num_tokens, num_heads, head_size) = query.shape().dims3()?;
+    // let (num_tokens_kv, num_kv_heads, head_size_kv) = key.shape().dims3()?;
+    // let query_stride = query.stride()[0];
+    // let key_stride = key.stride()[0];
 
     let params = RotaryEmbeddingKernelParams {
         stream: std::ptr::null_mut(),
@@ -121,7 +129,7 @@ pub fn apply_rotary_embedding(
         is_neox,
         scalar_type: get_scalar_type(query.dtype()),
     };
-    // println!("params:{:?}", params);
+    // println!("params:{:?}, {:?}", params, key.shape(),);
     let position_data = get_tensor_cuda_device_ptr(position)?;
     let query_data = get_tensor_cuda_device_ptr(query)?;
     let key_data = get_tensor_cuda_device_ptr(key)?;
