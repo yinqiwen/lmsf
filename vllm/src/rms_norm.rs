@@ -69,11 +69,7 @@ impl RmsNorm {
             eps,
         })
     }
-    pub fn forward_residual(
-        &self,
-        xs: Tensor,
-        residual: Tensor,
-    ) -> candle_core::Result<(Tensor, Tensor)> {
+    pub fn forward_residual_(&self, xs: &Tensor, residual: &Tensor) -> candle_core::Result<()> {
         let hidden_size = *xs.dims().last().unwrap();
         let num_tokens = xs.elem_count() / hidden_size;
         let params = RmsNormKernelParams {
@@ -84,8 +80,8 @@ impl RmsNorm {
             dtype: get_scalar_type(xs.dtype()),
         };
         let weight_data = get_tensor_cuda_device_ptr(&self.weight)?;
-        let xs_data = get_tensor_cuda_device_ptr(&xs)?;
-        let residual_data = get_tensor_cuda_device_ptr(&residual)?;
+        let xs_data = get_tensor_cuda_device_ptr(xs)?;
+        let residual_data = get_tensor_cuda_device_ptr(residual)?;
         unsafe {
             vllm_fused_add_rms_norm(
                 xs_data.as_ffi_ptr(),
@@ -94,7 +90,7 @@ impl RmsNorm {
                 params,
             );
         }
-        Ok((xs, residual))
+        Ok(())
     }
 
     pub fn forward_<F: TensorCreator>(
@@ -112,7 +108,7 @@ impl RmsNorm {
             dtype: get_scalar_type(xs.dtype()),
         };
         let weight_data = get_tensor_cuda_device_ptr(&self.weight)?;
-        let xs_data = get_tensor_cuda_device_ptr(&xs)?;
+        let xs_data = get_tensor_cuda_device_ptr(xs)?;
         let out = tensor_creator.new(xs.shape(), xs.dtype(), xs.device(), false)?;
         let out_data = get_tensor_cuda_device_ptr(&out)?;
         unsafe {

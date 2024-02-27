@@ -137,13 +137,6 @@ impl LLMEngine {
         })
     }
 
-    pub fn apply_chat_template(
-        &self,
-        conversation: &Vec<HashMap<String, String>>,
-    ) -> Result<String> {
-        todo!("apply_chat_template")
-    }
-
     pub fn add_request(
         &mut self,
         request_id: u64,
@@ -605,7 +598,7 @@ impl LLMEngine {
         arrival_time: std::time::Duration,
     ) -> Result<()> {
         let prompt = self.get_prompt(prompt)?;
-        println!("##prompt:{}", prompt);
+        // println!("##prompt:{}", prompt);
         self.add_request(
             request_id,
             &prompt,

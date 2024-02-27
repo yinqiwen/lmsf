@@ -9,13 +9,13 @@ void test_softmax() {
   std::vector<CTensorView> ops;
   CTensorView input;
   input.dtype = ScalarType::DATA_F32;
-  input.shape[0] = 3;
-  input.shape[1] = 4;
+  input.shape[0] = 1;
+  input.shape[1] = 12;
   input.ndim = 2;
-  input.stride[0] = 4;
+  input.stride[0] = 12;
   input.stride[1] = 1;
-  std::vector<float> data{0.0226, 0.7511, 0.4131, 0.5771, 0.1227, 0.1021,
-                          0.3893, 0.5257, 0.9848, 0.6543, 0.7536, 0.5954};
+  std::vector<float> data{0.8315, 0.1533, 0.8496, 0.9023, 0.6729, 0.5840,
+                          0.1196, 0.3892, 0.6479, 0.7036, 0.2085, 0.6431};
   float* input_dptr = nullptr;
   cudaMalloc((void**)&input_dptr, sizeof(float) * data.size());
   cudaMemcpy(input_dptr, data.data(), sizeof(float) * data.size(), cudaMemcpyKind::cudaMemcpyHostToDevice);

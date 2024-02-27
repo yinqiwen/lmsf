@@ -29,13 +29,24 @@
 ** OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <cuda_fp16.h>
-#include <cuda_runtime_api.h>
-#include <memory>
+#pragma once
 #include "tops/c_api/c_api.h"
-#include "tops/oneflow/kernel/distribution/exponential_distribution.h"
-#include "tops/oneflow/random/cuda_random_generator.h"
+#include "tops/tensorrt_llm/common/cublasMMWrapper.h"
+#include "tops/tensorrt_llm/gemm/gemm_profiler.h"
 
-extern "C" {
-void cuda_tensor_softmax(CTensorView input, cudaStream_t stream, CTensorView output) {}
-}
+namespace tensorrt_llm {
+namespace gemm {
+
+struct Gemm {
+  std::shared_ptr<tensorrt_llm::common::CublasMMWrapper> cublas;
+  std::shared_ptr<tensorrt_llm::gemm::CublasLtGemmPluginProfiler> profiler;
+  void* workspace = nullptr;
+  Gemm(std::shared_ptr<tensorrt_llm::common::CublasMMWrapper> cublas_,
+       std::shared_ptr<tensorrt_llm::gemm::CublasLtGemmPluginProfiler> profiler_, void* workspace_)
+      : cublas(cublas_), profiler(profiler_), workspace(workspace_) {}
+  void configGemm(CublasDataType dtype, bool transA, bool transB, CShapeView min_input, CShapeView max_input,
+                  CShapeView weight);
+  int gemm(int transA, int transB, CTensorView A, CTensorView B, CTensorView C);
+};
+}  // namespace gemm
+}  // namespace tensorrt_llm

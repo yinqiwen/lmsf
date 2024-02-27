@@ -120,6 +120,7 @@ void CublasMMWrapper::Gemm(cublasOperation_t transa, cublasOperation_t transb,
   half h_beta = (half)(f_beta);
 
   std::lock_guard<std::mutex> lock(*mMutex);
+
   // TODO: default cublas libs
   usingCublasLt = usingCublasLt && mAType == CUDA_R_16F;
   bool isFp16ComputeType = mComputeType == CUBLAS_COMPUTE_16F;

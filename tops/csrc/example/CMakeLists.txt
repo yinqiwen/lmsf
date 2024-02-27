@@ -26,3 +26,6 @@ target_link_libraries(test_scatter PUBLIC -lcublas -lcublasLt -lcudart tops)
 
 add_executable(test_softmax test_softmax.cc)
 target_link_libraries(test_softmax PUBLIC -lcublas -lcublasLt -lcudart tops)
+
+add_executable(test_gemm test_gemm.cc)
+target_link_libraries(test_gemm PUBLIC -lcublas -lcublasLt -lcudart tops)

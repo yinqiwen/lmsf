@@ -2,4 +2,5 @@
 
 add_subdirectory(common)
 add_subdirectory(kernels)
+add_subdirectory(gemm)
 add_subdirectory(c_api)

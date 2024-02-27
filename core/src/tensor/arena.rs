@@ -36,7 +36,7 @@ impl TensorArenaUnit {
             });
         }
         let n = shape.elem_count();
-        let allign_n = (n + ALLIGNMENT - 1) & !(n - 1);
+        let allign_n = (n + ALLIGNMENT - 1) / ALLIGNMENT * ALLIGNMENT;
         let curosr = self.curosr.load(std::sync::atomic::Ordering::SeqCst);
         if curosr + allign_n > self.capacity {
             return candle_core::bail!(
@@ -59,18 +59,21 @@ impl TensorArenaUnit {
 struct TensorArenaUnitGroup {
     group: Vec<TensorArenaUnit>,
     min_block_size: usize,
+    cursor: AtomicUsize,
 }
 impl TensorArenaUnitGroup {
     pub fn new(min_block_size: usize) -> Self {
         Self {
             group: Vec::new(),
             min_block_size,
+            cursor: AtomicUsize::new(0),
         }
     }
     pub fn reset(&self) {
         for arena in &self.group {
             arena.reset();
         }
+        self.cursor.store(0, std::sync::atomic::Ordering::SeqCst);
     }
     pub fn len(&self) -> usize {
         self.group.len()
@@ -83,8 +86,10 @@ impl TensorArenaUnitGroup {
     }
 
     fn do_get(&mut self, dtype: DType, shape: &Shape, zero: bool) -> candle_core::Result<Tensor> {
-        if !self.group.is_empty() {
-            match self.group[self.group.len() - 1].get(dtype, shape, zero) {
+        let curosr = self.cursor.load(std::sync::atomic::Ordering::SeqCst);
+
+        if curosr < self.group.len() {
+            match self.group[curosr].get(dtype, shape, zero) {
                 Ok(s) => {
                     return Ok(s);
                 }
@@ -121,6 +126,11 @@ impl TensorArenaUnitGroup {
         //println!("create with n:{}/{}/{}", new_block_len, allign_n, n);
         let segment = TensorArenaUnit::new(new_block_len, dtype, device)?;
         self.group.push(segment);
+        if self.group.len() > 1 {
+            self.cursor
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        }
+
         self.do_get(dtype, &shape, zero)
     }
 }

@@ -1,7 +1,8 @@
 /*
 ** BSD 3-Clause License
 **
-** Copyright (c) 2023, qiyingwang <qiyingwang@tencent.com>, the respective contributors, as shown by the AUTHORS file.
+** Copyright (c) 2023, qiyingwang <qiyingwang@tencent.com>, the respective
+*contributors, as shown by the AUTHORS file.
 ** All rights reserved.
 **
 ** Redistribution and use in source and binary forms, with or without
@@ -19,7 +20,8 @@
 **
 ** THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 ** AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-** IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+** IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+*ARE
 ** DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
 ** FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
 ** DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
@@ -29,6 +31,7 @@
 ** OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include "tops/tensorrt_llm/gemm/gemm.h"
 #include <cuda_fp16.h>
 #include <cuda_runtime_api.h>
 #include <memory>
@@ -40,13 +43,22 @@
 struct CudaHandle {
   std::shared_ptr<cublasHandle_t> cublasHandle;
   std::shared_ptr<cublasLtHandle_t> cublasLtHandle;
-  void* workspace = nullptr;
+  void *workspace = nullptr;
   ~CudaHandle() {
     if (nullptr != workspace) {
       cudaFree(workspace);
     }
   }
 };
+
+static std::shared_ptr<tensorrt_llm::gemm::CublasLtGemmPluginProfiler> GetCublasLtProfiler() {
+  static std::shared_ptr<tensorrt_llm::gemm::CublasLtGemmPluginProfiler> instance;
+  if (!instance) {
+    instance = std::make_shared<tensorrt_llm::gemm::CublasLtGemmPluginProfiler>();
+    instance->load(GEMM_CONFIG);
+  }
+  return instance;
+}
 // not thread safe
 static std::shared_ptr<CudaHandle> GetCudaHandle(int device) {
   static std::unordered_map<int, std::shared_ptr<CudaHandle>> handlers;
@@ -67,20 +79,26 @@ static std::shared_ptr<CudaHandle> GetCudaHandle(int device) {
 };
 
 extern "C" {
-void delete_cublas_wrapper(void* cublas_wrapper) {
-  tensorrt_llm::common::CublasMMWrapper* cublas =
-      reinterpret_cast<tensorrt_llm::common::CublasMMWrapper*>(cublas_wrapper);
-  delete cublas;
+
+// int load_gemm_config(const char *file) {
+//   auto profiler = GetCublasLtProfiler();
+//   return profiler->load(file);
+// }
+int save_gemm_config() {
+  auto profiler = GetCublasLtProfiler();
+  return profiler->save(GEMM_CONFIG);
 }
-void* new_cublas_wrapper(int device, cudaStream_t stream, int dtype) {
+
+void delete_gemm(void *gemm_) {
+  tensorrt_llm::gemm::Gemm *gemm = reinterpret_cast<tensorrt_llm::gemm::Gemm *>(gemm_);
+  delete gemm;
+}
+
+void *new_gemm(int device, cudaStream_t stream, int dtype) {
   cudaSetDevice(device);
   auto handle = GetCudaHandle(device);
-  // auto cublasHandle = std::make_shared<cublasHandle_t>();
-  // cublasCreate(cublasHandle.get());
-  // auto cublasLtHandle = std::make_shared<cublasLtHandle_t>();
-  // cublasLtCreate(cublasLtHandle.get());
-  auto* wrapper =
-      new tensorrt_llm::common::CublasMMWrapper(handle->cublasHandle, handle->cublasLtHandle, nullptr, nullptr);
+  auto wrapper = std::make_shared<tensorrt_llm::common::CublasMMWrapper>(handle->cublasHandle, handle->cublasLtHandle,
+                                                                         nullptr, nullptr);
   wrapper->setWorkspace(handle->workspace);
   wrapper->setStream(stream);
   switch (dtype) {
@@ -100,69 +118,34 @@ void* new_cublas_wrapper(int device, cudaStream_t stream, int dtype) {
       throw new std::runtime_error("unsupported dtype to create cublas_wrapper");
     }
   }
-  return wrapper;
+  auto *gemm = new tensorrt_llm::gemm::Gemm(wrapper, GetCublasLtProfiler(), handle->workspace);
+  return gemm;
 }
-
-static void getProblemParams(cublasOperation_t& transa, cublasOperation_t& transb, int& m, int& n, int& k, int& lda,
-                             int& ldb, int& ldc, int transA, int transB, int M, int N, int K) {
-  transa = transB ? CUBLAS_OP_T : CUBLAS_OP_N;
-  transb = transA ? CUBLAS_OP_T : CUBLAS_OP_N;
-  m = N;
-  n = M;
-  k = K;
-  lda = transB ? K : N;
-  ldb = transA ? M : K;
-  ldc = N;
-}
-
-static int32_t computeMDimension(int transA, const int32_t nbDims, const int64_t* dims) {
-  int32_t M = 1;
-  if (transA) {
-    for (int i = nbDims - 1; i > 0; --i) {
-      M *= dims[i];
+void gemm_config(void *gemm_, int dtype, bool transA, bool transB, CShapeView min_input, CShapeView max_input,
+                 CShapeView weight) {
+  tensorrt_llm::gemm::Gemm *gemm = reinterpret_cast<tensorrt_llm::gemm::Gemm *>(gemm_);
+  tensorrt_llm::common::CublasDataType cublas_dtype = tensorrt_llm::common::CublasDataType::FLOAT_DATATYPE;
+  switch (dtype) {
+    case ScalarType::DATA_F16: {
+      cublas_dtype = tensorrt_llm::common::CublasDataType::HALF_DATATYPE;
+      break;
     }
-  } else {
-    for (int i = 0; i < nbDims - 1; ++i) {
-      M *= dims[i];
+    case ScalarType::DATA_BF16: {
+      cublas_dtype = tensorrt_llm::common::CublasDataType::BFLOAT16_DATATYPE;
+      break;
+    }
+    case ScalarType::DATA_F32: {
+      cublas_dtype = tensorrt_llm::common::CublasDataType::FLOAT_DATATYPE;
+      break;
+    }
+    default: {
+      throw new std::runtime_error("unsupported dtype to create gemm_config");
     }
   }
-  return M;
+  gemm->configGemm(cublas_dtype, transA, transB, min_input, max_input, weight);
 }
-
-static int32_t computeNDimension(int transB, const int32_t nbDims, const int64_t* dims) {
-  int32_t N = 1;
-  if (transB) {
-    for (int i = 0; i < nbDims - 1; ++i) {
-      N *= dims[i];
-    }
-  } else {
-    for (int i = nbDims - 1; i > 0; --i) {
-      N *= dims[i];
-    }
-  }
-  return N;
-}
-
-void cublas_gemm(void* cublas_wrapper, int transA, int transB, CTensorView input, CTensorView weight,
-                 CTensorView output) {
-  tensorrt_llm::common::CublasMMWrapper* cublas =
-      reinterpret_cast<tensorrt_llm::common::CublasMMWrapper*>(cublas_wrapper);
-  const int nbDimsA = input.ndim;
-  const int nbDimsB = weight.ndim;
-  const auto M = computeMDimension(transA, nbDimsA, input.shape);
-  const auto N = computeNDimension(transB, nbDimsB, weight.shape);
-  const int K = transA ? input.shape[0] : input.shape[nbDimsA - 1];
-
-  auto A = weight.ptr;
-  auto B = input.ptr;
-  auto C = output.ptr;
-  cublasOperation_t transa, transb;
-  int m, n, k;
-  int lda, ldb, ldc;
-  getProblemParams(transa, transb, m, n, k, lda, ldb, ldc, transA, transB, M, N, K);
-  cublas->createDescriptors(static_cast<cublasOperation_t>(transa), static_cast<cublasOperation_t>(transb), m, n, k,
-                            lda, ldb, ldc);
-  cublas->Gemm(transa, transb, m, n, k, A, lda, B, ldb, C, ldc);
-  cublas->destroyDescriptors();
+int gemm_execute(void *gemm_, int transa, int transb, CTensorView input, CTensorView weight, CTensorView output) {
+  tensorrt_llm::gemm::Gemm *gemm = reinterpret_cast<tensorrt_llm::gemm::Gemm *>(gemm_);
+  return gemm->gemm(transa, transb, input, weight, output);
 }
 }

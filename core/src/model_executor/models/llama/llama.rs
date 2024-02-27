@@ -9,7 +9,8 @@ use crate::model_executor::input_metadata::InputMetadata;
 use crate::model_executor::layers::Cache;
 use crate::model_executor::layers::{PagedAttention, QKVLinear, RotaryEmbedding};
 use crate::model_executor::models::Model;
-use crate::tensor::cuda_add_;
+use crate::tensor::{cuda_add_, TensorArena};
+use common::{DefaultTensorCreator, TensorCreator};
 
 pub const MAX_SEQ_LEN: usize = 4096;
 
@@ -118,7 +119,7 @@ struct CausalSelfAttention {
     // k_proj: Linear,
     // v_proj: Linear,
     qkv_proj: QKVLinear,
-    o_proj: Linear,
+    o_proj: crate::model_executor::layers::Linear,
     num_attention_heads: usize,
     num_key_value_heads: usize,
     head_dim: usize,
@@ -219,7 +220,42 @@ impl CausalSelfAttention {
         }
 
         let dtype = q.dtype();
-        let device = q.device().clone();
+
+        let mut default_creator = DefaultTensorCreator {};
+        let attn_output = self.attn.forward(
+            &q,
+            &k,
+            &v,
+            cache.map(|(k, _)| k),
+            cache.map(|(_, v)| v),
+            input_metadata,
+            dtype,
+            log_enable,
+            &mut default_creator,
+        )?;
+        if log_enable {
+            // tracing::info!("after attn: :{}", attn_output.to_string());
+            // todo!("aaa");
+        }
+        self.o_proj.forward(&attn_output)
+    }
+    fn forward_<F: TensorCreator>(
+        &self,
+        tensor_creator: &mut F,
+        x: &Tensor,
+        positions: &Tensor,
+        input_metadata: &mut InputMetadata,
+        cache: Option<(&Tensor, &Tensor)>,
+        log_enable: bool,
+    ) -> Result<Tensor> {
+        let _enter = self.span.enter();
+
+        let (q, k, v) = self.qkv_proj.forward_(x, tensor_creator)?;
+
+        self.rotary_emb.forward(positions, &q, &k)?;
+
+        let dtype = q.dtype();
+        // let device = q.device().clone();
 
         let attn_output = self.attn.forward(
             &q,
@@ -229,14 +265,14 @@ impl CausalSelfAttention {
             cache.map(|(_, v)| v),
             input_metadata,
             dtype,
-            device,
             log_enable,
+            tensor_creator,
         )?;
         if log_enable {
             // tracing::info!("after attn: :{}", attn_output.to_string());
             // todo!("aaa");
         }
-        self.o_proj.forward(&attn_output)
+        self.o_proj.forward_(&attn_output, tensor_creator)
     }
 
     fn repeat_kv(&self, x: Tensor) -> Result<Tensor> {
@@ -266,7 +302,9 @@ impl CausalSelfAttention {
             &vb, size_in, size_q, "q_proj", size_kv, "k_proj", size_kv, "v_proj",
         )?;
 
-        let o_proj = linear(size_q, size_in, vb.pp("o_proj"))?;
+        //let o_proj = linear(size_q, size_in, vb.pp("o_proj"))?;
+        let o_proj =
+            crate::model_executor::layers::linear_no_bias(size_q, size_in, vb.pp("o_proj"))?;
 
         let head_dim = cfg.hidden_size / cfg.num_attention_heads;
         Ok(Self {
@@ -319,6 +357,21 @@ struct Mlp {
 }
 
 impl Mlp {
+    fn forward_<F: TensorCreator>(
+        &self,
+        x: &Tensor,
+        log_enable: bool,
+        tensor_creator: &mut F,
+    ) -> Result<Tensor> {
+        let _enter = self.span.enter();
+        let x = self.gate_up.forward_(x, tensor_creator)?;
+
+        if log_enable {
+            // tracing::info!("after gateup:{}\n{}", x1.to_string(), x2.to_string());
+        }
+        let x = vllm::silu_and_mul_(&x, tensor_creator)?;
+        self.c_proj.forward_(&x, tensor_creator)
+    }
     fn forward(&self, x: &Tensor, log_enable: bool) -> Result<Tensor> {
         let _enter = self.span.enter();
         // let x1 = self.c_fc1.forward(x)?;
@@ -461,6 +514,43 @@ struct Block2 {
 }
 
 impl Block2 {
+    fn forward_<F: TensorCreator>(
+        &self,
+        tensor_creator: &mut F,
+        mut hidden_states: Tensor,
+        positions: &Tensor,
+        residual: Option<Tensor>,
+        cache: Option<(&Tensor, &Tensor)>,
+        input_metadata: &mut InputMetadata,
+    ) -> Result<(Tensor, Tensor)> {
+        let (hidden_states, residual) = match residual {
+            Some(residual) => {
+                self.rms_1.forward_residual_(&hidden_states, &residual)?;
+                (hidden_states, residual)
+            }
+            None => {
+                let new_hidden_states = self.rms_1.forward_(&hidden_states, tensor_creator)?;
+                let residual = hidden_states;
+                (new_hidden_states, residual)
+            }
+        };
+
+        let hidden_states = self.attn.forward_(
+            tensor_creator,
+            &hidden_states,
+            positions,
+            input_metadata,
+            cache,
+            self.idx == 0,
+        )?;
+        self.rms_2.forward_residual_(&hidden_states, &residual)?;
+
+        // let start = std::time::Instant::now();
+        let hidden_states = self
+            .mlp
+            .forward_(&hidden_states, self.idx == 0, tensor_creator)?;
+        Ok((hidden_states, residual))
+    }
     fn forward(
         &self,
         mut hidden_states: Tensor,
@@ -469,23 +559,17 @@ impl Block2 {
         cache: Option<(&Tensor, &Tensor)>,
         input_metadata: &mut InputMetadata,
     ) -> Result<(Tensor, Tensor)> {
-        // let cuda_dev = match hidden_states.device() {
-        //     Device::Cuda(cuda) => cuda.clone(),
-        //     _ => {
-        //         candle_core::bail!("")
-        //     }
-        // };
-        // let start = std::time::Instant::now();
         let (hidden_states, residual) = match residual {
-            Some(residual) => self.rms_1.forward_residual(hidden_states, residual)?,
+            Some(residual) => {
+                self.rms_1.forward_residual_(&hidden_states, &residual)?;
+                (hidden_states, residual)
+            }
             None => {
                 let new_hidden_states = self.rms_1.forward(&hidden_states)?;
                 let residual = hidden_states;
                 (new_hidden_states, residual)
             }
         };
-        // cuda_dev.synchronize();
-        // tracing::info!("Block rms1 cost {:?}", start.elapsed(),);
 
         let hidden_states = self.attn.forward(
             &hidden_states,
@@ -494,23 +578,10 @@ impl Block2 {
             cache,
             self.idx == 0,
         )?;
-        // cuda_dev.synchronize();
-        // tracing::info!("Block attn cost {:?}", start.elapsed(),);
-        let (hidden_states, residual) = self.rms_2.forward_residual(hidden_states, residual)?;
-        // cuda_dev.synchronize();
-        // tracing::info!("Block rms2 cost {:?}", start.elapsed(),);
-        // if self.idx == 0 {
-        //     tracing::info!("###before mlp hidden_states:{}", hidden_states.to_string());
-        // }
-        // cuda_dev.synchronize();
-        let start = std::time::Instant::now();
-        // tracing::info!("Block rms1 cost {:?}", start.elapsed(),);
+        self.rms_2.forward_residual_(&hidden_states, &residual)?;
+
+        // let start = std::time::Instant::now();
         let hidden_states = self.mlp.forward(&hidden_states, self.idx == 0)?;
-        // if self.idx == 0 {
-        //     tracing::info!("###after mlp hidden_states:{}", hidden_states.to_string());
-        // }
-        // cuda_dev.synchronize();
-        // tracing::info!("Block mlp cost {:?}", start.elapsed(),);
         Ok((hidden_states, residual))
     }
 
@@ -540,12 +611,13 @@ pub struct Llama {
     wte: Embedding,
     blocks: Vec<Block2>,
     ln_f: vllm::RmsNorm,
-    lm_head: Linear,
+    lm_head: crate::model_executor::layers::Linear,
+    block_arena: [TensorArena; 2],
 }
 
 impl Llama {
     pub fn do_forward(
-        &self,
+        &mut self,
         x: &Tensor,
         positions: &Tensor,
         kv_caches: Option<&Vec<(Tensor, Tensor)>>,
@@ -587,7 +659,10 @@ impl Llama {
 
         if let Some(kv_caches) = kv_caches {
             for (idx, block) in self.blocks.iter().enumerate() {
-                let (hidden_states, new_residual) = block.forward(
+                let arena_idx = idx % 2;
+                self.block_arena[1 - arena_idx].reset();
+                let (hidden_states, new_residual) = block.forward_(
+                    &mut self.block_arena[arena_idx],
                     x,
                     positions,
                     residual,
@@ -598,9 +673,18 @@ impl Llama {
                 residual = Some(new_residual);
             }
         } else {
-            for block in &self.blocks {
-                let (hidden_states, new_residual) =
-                    block.forward(x, positions, residual, None, input_metadata)?;
+            // self.block_arena[0].reset();
+            for (idx, block) in self.blocks.iter().enumerate() {
+                let arena_idx = idx % 2;
+                self.block_arena[1 - arena_idx].reset();
+                let (hidden_states, new_residual) = block.forward_(
+                    &mut self.block_arena[arena_idx],
+                    x,
+                    positions,
+                    residual,
+                    None,
+                    input_metadata,
+                )?;
                 x = hidden_states;
                 residual = Some(new_residual);
             }
@@ -608,12 +692,13 @@ impl Llama {
         // cuda_dev.synchronize();
         // tracing::info!("block cost {:?}", start.elapsed(),);
         // cuda_dev.synchronize();
-        let start = std::time::Instant::now();
+        // let start = std::time::Instant::now();
         // tracing::info!("x0 shape:{:?}/{}", x.shape(), x.to_string());
         // tracing::info!("before ln_f:{:?}", x.to_string());
         //let x = self.ln_f.forward(&x)?;
         // tracing::info!("before ln_f0:{:?}", x.to_string());
-        let (x, _) = self.ln_f.forward_residual(x, residual.unwrap())?;
+        self.ln_f
+            .forward_residual_(&x, residual.as_ref().unwrap())?;
         // cuda_dev.synchronize();
         // tracing::info!("ln_f cost {:?}", start.elapsed(),);
 
@@ -622,7 +707,7 @@ impl Llama {
 
         // tracing::info!("x1 shape:{:?}/{}", x.shape(), x.to_string());
         // tracing::info!("x2 shape:{:?}", x.shape());
-        let logits = self.lm_head.forward(&x)?;
+        let logits = self.lm_head.forward_(&x, &mut self.block_arena[1])?;
         // let logits = logits.to_dtype(DType::F32)?;
         // cuda_dev.synchronize();
         // tracing::info!("lm_head cost {:?}", start.elapsed(),);
@@ -631,7 +716,12 @@ impl Llama {
 
     pub fn load(vb: VarBuilder, cache: &Cache, cfg: &Config) -> Result<Self> {
         let wte = embedding(cfg, vb.pp("model.embed_tokens"))?;
-        let lm_head = linear(cfg.hidden_size, cfg.vocab_size, vb.pp("lm_head"))?;
+        //let lm_head = linear(cfg.hidden_size, cfg.vocab_size, vb.pp("lm_head"))?;
+        let lm_head = crate::model_executor::layers::linear_no_bias(
+            cfg.hidden_size,
+            cfg.vocab_size,
+            vb.pp("lm_head"),
+        )?;
         let ln_f = vllm::RmsNorm::load(cfg.hidden_size, cfg.rms_norm_eps, vb.pp("model.norm"))?;
         let blocks: Vec<_> = (0..cfg.num_hidden_layers)
             .map(|i| Block2::load(vb.pp(&format!("model.layers.{i}")), cache, cfg, i).unwrap())
@@ -642,6 +732,7 @@ impl Llama {
             blocks,
             ln_f,
             lm_head,
+            block_arena: [TensorArena::new(vb.device()), TensorArena::new(vb.device())],
         })
     }
 }

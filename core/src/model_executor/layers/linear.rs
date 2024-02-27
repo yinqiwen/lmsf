@@ -4,6 +4,7 @@ use candle_core::IndexOp;
 use candle_core::{CudaDevice, DType, Device, Tensor, D};
 use candle_nn::Module;
 use candle_nn::VarBuilder;
+use common::{DefaultTensorCreator, TensorCreator};
 use std::rc::Rc;
 
 pub struct Linear {
@@ -44,6 +45,19 @@ impl Linear {
             bias: None,
             cublas,
         })
+    }
+
+    pub fn forward_<F: TensorCreator>(
+        &self,
+        x: &Tensor,
+        tensor_creator: &mut F,
+    ) -> candle_core::Result<Tensor> {
+        let x1 = self.cublas.linear_(x, &self.weight, tensor_creator)?;
+
+        match &self.bias {
+            None => Ok(x1),
+            Some(bias) => x1.broadcast_add(bias),
+        }
     }
 }
 
@@ -208,6 +222,22 @@ impl QKVLinear {
         // debug_file: Option<&str>,
     ) -> candle_core::Result<(Tensor, Tensor, Tensor)> {
         let result = self.linear.forward(x)?;
+        // if debug_file.is_some() {
+        //     result.save_safetensors("qkv", debug_file.unwrap());
+        // }
+        let q = result.i((.., .., 0..self.q_size))?;
+        let k = result.i((.., .., self.q_size..(self.q_size + self.k_size)))?;
+        let v = result.i((.., .., (self.q_size + self.k_size)..))?;
+        Ok((q, k, v))
+    }
+
+    pub fn forward_<F: TensorCreator>(
+        &self,
+        x: &Tensor,
+        tensor_creator: &mut F,
+        // debug_file: Option<&str>,
+    ) -> candle_core::Result<(Tensor, Tensor, Tensor)> {
+        let result = self.linear.forward_(x, tensor_creator)?;
         // if debug_file.is_some() {
         //     result.save_safetensors("qkv", debug_file.unwrap());
         // }

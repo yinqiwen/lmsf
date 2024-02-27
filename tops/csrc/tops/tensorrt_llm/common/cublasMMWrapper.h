@@ -134,6 +134,8 @@ class CublasMMWrapper {
   cublasHandle_t getCublasHandle() { return *(this->mCublasHandle); }
 
   cublasLtHandle_t getCublasLtHandle() const { return *(this->mCublasLtHandle); }
+
+  cudaStream_t getStream() const { return mStream; }
 };
 
 }  // namespace common

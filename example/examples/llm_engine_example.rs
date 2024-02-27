@@ -1,4 +1,4 @@
-use std::io::Write;
+use std::{io::Write, ops::Sub};
 
 use clap::{Parser, ValueEnum};
 
@@ -14,37 +14,42 @@ async fn async_run(args: &EngineArgs) -> anyhow::Result<()> {
     sampling_params.top_k = 5;
     sampling_params.presence_penalty = 0.2;
     sampling_params.max_tokens = 128;
-    let prompt = "To be or not to be, ".to_string();
-    let prompt = LLMPrompt::from(prompt);
-    let receiver = runner.add(prompt, sampling_params, true)?;
-    match receiver {
-        LLMTaskResponseReceiver::Normal(rx) => {
-            if let Ok(output) = rx.await {
-                for output in output.outputs {
-                    //tracing::info!("gen text:{}", output.text);
-                    print!("{}", output.latest_token);
-                    std::io::stdout().flush();
+
+    for i in 0..3 {
+        let prompt = "To be or not to be, ".to_string();
+        let prompt = LLMPrompt::from(prompt);
+        let start = std::time::Instant::now();
+        let receiver = runner.add(prompt, sampling_params.clone(), true)?;
+        match receiver {
+            LLMTaskResponseReceiver::Normal(rx) => {
+                if let Ok(output) = rx.await {
+                    for output in output.outputs {
+                        //tracing::info!("gen text:{}", output.text);
+                        print!("{}", output.latest_token);
+                        std::io::stdout().flush();
+                    }
                 }
             }
-        }
-        LLMTaskResponseReceiver::Stream(mut rx) => {
-            tracing::info!("stream");
-            loop {
-                match rx.recv().await {
-                    Some(result) => {
-                        for output in result.outputs {
-                            print!("{}", output.latest_token);
-                            std::io::stdout().flush();
+            LLMTaskResponseReceiver::Stream(mut rx) => {
+                tracing::info!("stream");
+                loop {
+                    match rx.recv().await {
+                        Some(result) => {
+                            for output in result.outputs {
+                                print!("{}", output.latest_token);
+                                std::io::stdout().flush();
+                            }
+                        }
+                        None => {
+                            break;
                         }
                     }
-                    None => {
-                        break;
-                    }
                 }
             }
         }
+        println!("\n[{}]cost {:?}!", i, start.elapsed());
     }
-    println!("\nExit!");
+
     Ok(())
 }
 
@@ -141,7 +146,11 @@ fn run(args: &EngineArgs) -> anyhow::Result<()> {
 #[tokio::main]
 async fn main() {
     let args = EngineArgs::parse();
+
     tracing_subscriber::fmt::init();
+
+    let current_dir = std::env::current_dir().unwrap();
+    tracing::info!("Working dir:{:?}:", current_dir);
     // if let Err(e) = run(&args) {
     //     tracing::error!("{}", e);
     // }

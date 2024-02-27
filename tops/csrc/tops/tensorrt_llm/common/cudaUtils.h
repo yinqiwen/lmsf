@@ -49,6 +49,24 @@ enum CublasDataType {
   FP8_DATATYPE = 4
 };
 
+inline size_t typeSize(CublasDataType type) {
+  switch (type) {
+    case CublasDataType::FLOAT_DATATYPE:
+      return 4UL;
+    case CublasDataType::HALF_DATATYPE:
+      return 2UL;
+    case CublasDataType::BFLOAT16_DATATYPE:
+      return 2UL;
+    case CublasDataType::INT8_DATATYPE:
+      return 1UL;
+    case CublasDataType::FP8_DATATYPE:
+      return 1UL;
+  }
+
+  // TLLM_THROW("Unknown dtype %d", static_cast<int>(type));
+  return 0;
+}
+
 enum TRTLLMCudaDataType { FP32 = 0, FP16 = 1, BF16 = 2, INT8 = 3, FP8 = 4 };
 
 enum class OperationType { FP32, FP16, BF16, INT8, FP8 };

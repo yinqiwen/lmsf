@@ -1,3 +1,4 @@
+mod gemma;
 mod llama;
 mod model;
 mod model_factory;

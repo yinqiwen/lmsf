@@ -1,6 +1,7 @@
 use candle_core::{DType, Device, Tensor, D};
 
 use crate::model_executor::input_metadata::InputMetadata;
+use common::{DefaultTensorCreator, TensorCreator};
 
 use super::Cache;
 
@@ -121,7 +122,9 @@ impl PagedAttention {
             .reshape((batch_size, seq_len, self.num_attention_heads, self.head_dim))?
             .transpose(1, 2)?;
         let key = self.repeat_kv(key)?;
-        let key = self.repeat_kv(key)?;
+        // let key = self.repeat_kv(key)?;
+        let value = self.repeat_kv(value)?;
+
         let y = if self.use_flash_attn {
             // flash-attn expects (b_sz, seq_len, nheads, head_dim)
             let query = query.transpose(1, 2)?;
@@ -137,7 +140,8 @@ impl PagedAttention {
             let att = (q.matmul(&k.t()?)? / (self.head_dim as f64).sqrt())?;
             let mask = self.cache.mask(seq_len)?.broadcast_as(att.shape())?;
             let att = masked_fill(&att, &mask, f32::NEG_INFINITY)?;
-            let att = candle_nn::ops::softmax(&att, D::Minus1)?;
+            let att = tops::cuda_softmax(&att, D::Minus1, std::ptr::null_mut())?;
+            //let att = candle_nn::ops::softmax(&att, D::Minus1)?;
             // Convert to contiguous as matmul doesn't support strided vs for now.
             att.matmul(&v.contiguous()?)?.to_dtype(in_dtype)?
         };
@@ -145,105 +149,8 @@ impl PagedAttention {
         Ok(y)
     }
 
-    // fn vllm_propmpt_run(){
-    //     if self.num_attention_heads != self.num_key_value_heads {
-    //         // # As of Nov 2023, xformers only supports MHA. For MQA/GQA,
-    //         // # project the key and value tensors to the desired number of
-    //         // # heads.
-    //         // # TODO(woosuk): Use MQA/GQA kernels for higher performance.
-    //         query = query.reshape((
-    //             query.shape().dims()[0],
-    //             self.num_key_value_heads,
-    //             self.num_queries_per_kv,
-    //             *query.shape().dims().last().unwrap(),
-    //         ))?;
-    //         key = key.unsqueeze(2)?;
-    //         key = key.reshape((
-    //             key.shape().dims()[0],
-    //             self.num_key_value_heads,
-    //             self.num_queries_per_kv,
-    //             *key.shape().dims().last().unwrap(),
-    //         ))?;
-
-    //         value = value.unsqueeze(2)?;
-    //         value = value.reshape((
-    //             value.shape().dims()[0],
-    //             self.num_key_value_heads,
-    //             self.num_queries_per_kv,
-    //             *value.shape().dims().last().unwrap(),
-    //         ))?;
-    //     }
-
-    //     // # Set attention bias if not provided. This typically happens at the
-    //     // # very attention layer of every iteration.
-    //     // # FIXME(woosuk): This is a hack.
-    //     if input_metadata.attn_bias.is_none() {
-    //         if let Some(alibi_slopes) = &self.alibi_slopes {
-    //             //     input_metadata.attn_bias = _make_alibi_bias(
-    //             //         self.alibi_slopes, self.num_kv_heads, batch_size,
-    //             //         seq_len, query.dtype)
-    //             let attn_bias = make_alibi_bias(
-    //                 alibi_slopes,
-    //                 self.num_key_value_heads,
-    //                 batch_size,
-    //                 seq_len,
-    //                 dtype,
-    //                 &device,
-    //             )?;
-    //             input_metadata.attn_bias = Some(Box::new(attn_bias));
-    //         } else {
-    //             let attn_bias = BlockDiagonalMask::from_seqlens(
-    //                 [seq_len.try_into().unwrap()].repeat(batch_size),
-    //                 None,
-    //             )?;
-
-    //             if let Some(sliding_window) = self.sliding_window {
-    //                 let attn_bias = attn_bias.make_local_attention(sliding_window);
-    //                 input_metadata.attn_bias = Some(Box::new(attn_bias));
-    //             } else {
-    //                 input_metadata.attn_bias = Some(Box::new(attn_bias));
-    //             }
-    //             //     attn_bias = BlockDiagonalCausalMask.from_seqlens(
-    //             //         [seq_len] * batch_size)
-    //             //     if self.sliding_window is not None:
-    //             //         attn_bias = attn_bias.make_local_attention(
-    //             //             self.sliding_window)
-    //             //     input_metadata.attn_bias = attn_bias
-    //         }
-    //     }
-
-    //     if let Some(alibi_slopes) = &self.alibi_slopes {
-    //         let mut q_new_shape = vec![batch_size, seq_len];
-    //         q_new_shape.extend(&query.shape().dims()[1..]);
-    //         query = query.reshape(q_new_shape)?;
-
-    //         let mut k_new_shape = vec![batch_size, seq_len];
-    //         k_new_shape.extend(&key.shape().dims()[1..]);
-    //         key = key.reshape(k_new_shape)?;
-
-    //         let mut v_new_shape = vec![batch_size, seq_len];
-    //         v_new_shape.extend(&value.shape().dims()[1..]);
-    //         value = value.reshape(v_new_shape)?;
-    //         // query = query.unflatten(0, (batch_size, seq_len))
-    //         // key = key.unflatten(0, (batch_size, seq_len))
-    //         // value = value.unflatten(0, (batch_size, seq_len))
-    //     } else {
-    //         query = query.unsqueeze(0)?;
-    //         key = key.unsqueeze(0)?;
-    //         value = value.unsqueeze(0)?;
-    //     }
-    //     memory_efficient_attention_forward(
-    //         &query,
-    //         &key,
-    //         &value,
-    //         input_metadata.attn_bias.as_ref().unwrap(),
-    //         0.0,
-    //         self.scale,
-    //     );
-    // }
-
     #[allow(clippy::too_many_arguments)]
-    pub fn forward(
+    pub fn forward<F: TensorCreator>(
         &self,
         query: &Tensor, //[batch_size, seq_len, num_heads * head_size]
         key: &Tensor,   //[batch_size, seq_len, num_heads * head_size]
@@ -252,8 +159,8 @@ impl PagedAttention {
         mut value_cache: Option<&Tensor>,
         input_metadata: &mut InputMetadata,
         dtype: DType,
-        device: Device,
         log_enable: bool,
+        tensor_creator: &mut F,
     ) -> candle_core::Result<Tensor> {
         if log_enable {
             // tracing::info!(
@@ -293,21 +200,13 @@ impl PagedAttention {
             match (key_cache, value_cache) {
                 (Some(key_cache), Some(value_cache)) => {
                     let max_context_len = input_metadata.max_context_len.unwrap();
-                    // candle_paged_attention::paged_attention(
-                    //     &query,
-                    //     key_cache,
-                    //     value_cache,
-                    //     input_metadata.block_tables.as_ref().unwrap(),
-                    //     input_metadata.context_lens.as_ref().unwrap(),
-                    //     max_context_len,
-                    //     self.scale,
-                    // )?
                     self.paged_attention(
                         &query,
                         key_cache,
                         value_cache,
                         input_metadata,
                         log_enable,
+                        tensor_creator,
                     )?
                 }
                 _ => {
@@ -319,13 +218,14 @@ impl PagedAttention {
         output.reshape((batch_size, seq_len, hidden_size))
     }
 
-    fn paged_attention(
+    fn paged_attention<F: TensorCreator>(
         &self,
         query: &Tensor,
         key_cache: &Tensor,
         value_cache: &Tensor,
         input_metadata: &mut InputMetadata,
         log_enable: bool,
+        tensor_creator: &mut F,
     ) -> candle_core::Result<Tensor> {
         let num_seqs = query.shape().dims()[0];
         let num_heads = query.shape().dims()[1];
@@ -350,7 +250,7 @@ impl PagedAttention {
             // );
         }
         let output = if use_v1 {
-            vllm::attention::apply_paged_attention_v1(
+            vllm::attention::apply_paged_attention_v1_(
                 self.scale,
                 max_context_len,
                 self.num_kv_heads,
@@ -360,9 +260,10 @@ impl PagedAttention {
                 input_metadata.block_tables.as_ref().unwrap(),
                 input_metadata.context_lens.as_ref().unwrap(),
                 self.alibi_slopes.as_ref(),
+                tensor_creator,
             )?
         } else {
-            vllm::attention::apply_paged_attention_v2(
+            vllm::attention::apply_paged_attention_v2_(
                 self.scale,
                 max_context_len,
                 self.num_kv_heads,
@@ -372,6 +273,7 @@ impl PagedAttention {
                 input_metadata.block_tables.as_ref().unwrap(),
                 input_metadata.context_lens.as_ref().unwrap(),
                 self.alibi_slopes.as_ref(),
+                tensor_creator,
             )?
         };
         Ok(output)

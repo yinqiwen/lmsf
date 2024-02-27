@@ -19,6 +19,7 @@ candle-core = { version = "0.3.3" }
 candle-kernels = { version = "0.3.3" }
 candle-nn = { version = "0.3.3" }
 candle-transformers = { version = "0.3.3" }
+candle-flash-attn = { version = "0.3.3" }
 # candle-ext = { git = "https://github.com/mokeyish/candle-ext.git", features = [
 #     "scatter",
 #     "cuda",

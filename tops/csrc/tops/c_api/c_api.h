@@ -95,8 +95,12 @@ void cuda_oneflow_rms_norm(CTensorView x, CTensorView weight, CShapeView normali
 void fastertransformer_silu_activation(CTensorView a, CTensorView b, int num_token, int inter_size,
                                        cudaStream_t stream);
 
-void delete_cublas_wrapper(void *cublas_wrapper);
-void *new_cublas_wrapper(int device, cudaStream_t stream, int dtype);
-void cublas_gemm(void *cublas_wrapper, int transa, int transb, CTensorView input, CTensorView weight,
-                 CTensorView output);
+// int load_gemm_config(const char *file);
+void gemm_config(void *gemm, int dtype, bool transA, bool transB, CShapeView min_input, CShapeView max_input,
+                 CShapeView weight);
+int save_gemm_config();
+void *new_gemm(int device, cudaStream_t stream, int dtype);
+void delete_gemm(void *gemm);
+
+int gemm_execute(void *gemm, int transa, int transb, CTensorView input, CTensorView weight, CTensorView output);
 }
