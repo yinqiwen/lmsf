@@ -76,6 +76,11 @@ pub struct EngineArgs {
         help = "'the percentage of GPU memory to be used for the model executor"
     )]
     gpu_memory_utilization: f32,
+
+    #[clap(default_value = "8000", long, help = "api server port")]
+    pub port: u16,
+    #[clap(default_value = "0.0.0.0", long, help = "api server host")]
+    pub host: String,
 }
 
 impl EngineArgs {
