@@ -81,6 +81,12 @@ pub struct EngineArgs {
     pub port: u16,
     #[clap(default_value = "0.0.0.0", long, help = "api server host")]
     pub host: String,
+
+    #[clap(long, help = "log dir")]
+    pub log_dir: Option<String>,
+
+    #[clap(default_value = "false", long, help = "print log into stderr")]
+    pub alsologtostderr: bool,
 }
 
 impl EngineArgs {

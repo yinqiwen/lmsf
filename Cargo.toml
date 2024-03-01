@@ -1,5 +1,13 @@
 [workspace]
-members = ["core", "example", "vllm", "tops", "common", "entrypoints"]
+members = [
+    "core",
+    "example",
+    "vllm",
+    "tops",
+    "common",
+    "entrypoints",
+    "candle-patch",
+]
 resolver = "2"
 [workspace.package]
 version = "0.1.0"
@@ -19,11 +27,9 @@ candle-core = { version = "0.3.3" }
 candle-kernels = { version = "0.3.3" }
 candle-nn = { version = "0.3.3" }
 candle-transformers = { version = "0.3.3" }
-candle-flash-attn = { version = "0.3.3" }
-# candle-ext = { git = "https://github.com/mokeyish/candle-ext.git", features = [
-#     "scatter",
-#     "cuda",
-# ] }
+# candle-flash-attn = { git = "https://github.com/huggingface/candle-flash-attn-v1.git", package = "candle-flash-attn-v1" }
+candle-flash-attn = { path = "/data/dev/rust/candle-flash-attn-v1", package = "candle-flash-attn-v1" }
+# candle-flash-attn = { version = "0.3.3" }
 half = "2.3.1"
 libc = "0.2"
 # tera = "1"
@@ -32,3 +38,7 @@ uuid = { version = "1.7.0", features = ["v4", "fast-rng", "macro-diagnostics"] }
 async-stream = "0.3.5"
 serde_json = "1.0"
 futures-core = "0.3"
+cudarc = { version = "0.9.14", features = ["f16"] }
+candle-ext = { git = "https://github.com/mokeyish/candle-ext.git", features = [
+    "cuda",
+] }

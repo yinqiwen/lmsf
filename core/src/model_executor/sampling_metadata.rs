@@ -1,10 +1,11 @@
-use candle_core::{DType, Device, IndexOp, Tensor};
+use candle_core::{quantized::QuantizedType, DType, Device, IndexOp, NdArray, Tensor};
 use std::{collections::HashMap, sync::Arc};
 
 use crate::common::{
     sampling_params::{SamplingParams, SamplingType},
     sequence::{Sequence, SequenceData, SequenceRef},
 };
+use common::TensorCreator;
 
 pub struct SamplingMetadata {
     pub(crate) seq_groups: Vec<(Vec<u64>, SamplingParams)>,
@@ -51,40 +52,40 @@ pub struct SamplingTensors {
 }
 
 impl SamplingTensors {
-    pub fn allocate_base_buffer(
-        max_batch: usize,
-        max_model_len: usize,
-        dtype: DType,
-        device: &Device,
-    ) -> candle_core::Result<Self> {
-        let temperatures = Tensor::zeros(max_batch, dtype, device)?;
-        let top_ps = Tensor::zeros(max_batch, dtype, device)?;
-        let top_ks = Tensor::zeros(max_batch, DType::U32, device)?;
-        let min_ps = Tensor::zeros(max_batch, dtype, device)?;
-        let presence_penalties = Tensor::zeros(max_batch, dtype, device)?;
-        let frequency_penalties = Tensor::zeros(max_batch, dtype, device)?;
-        let repetition_penalties = Tensor::zeros(max_batch, dtype, device)?;
-        let prompt_tokens = Tensor::zeros(max_batch * max_model_len, DType::I64, device)?;
-        let output_tokens = Tensor::zeros(max_batch * max_model_len, DType::I64, device)?;
-        Ok(Self {
-            temperatures,
-            top_ps,
-            top_ks,
-            min_ps,
-            presence_penalties,
-            frequency_penalties,
-            repetition_penalties,
-            prompt_tokens,
-            output_tokens,
-        })
-    }
+    // pub fn allocate_base_buffer(
+    //     max_batch: usize,
+    //     max_model_len: usize,
+    //     dtype: DType,
+    //     device: &Device,
+    // ) -> candle_core::Result<Self> {
+    //     let temperatures = Tensor::zeros(max_batch, dtype, device)?;
+    //     let top_ps = Tensor::zeros(max_batch, dtype, device)?;
+    //     let top_ks = Tensor::zeros(max_batch, DType::U32, device)?;
+    //     let min_ps = Tensor::zeros(max_batch, dtype, device)?;
+    //     let presence_penalties = Tensor::zeros(max_batch, dtype, device)?;
+    //     let frequency_penalties = Tensor::zeros(max_batch, dtype, device)?;
+    //     let repetition_penalties = Tensor::zeros(max_batch, dtype, device)?;
+    //     let prompt_tokens = Tensor::zeros(max_batch * max_model_len, DType::I64, device)?;
+    //     let output_tokens = Tensor::zeros(max_batch * max_model_len, DType::I64, device)?;
+    //     Ok(Self {
+    //         temperatures,
+    //         top_ps,
+    //         top_ks,
+    //         min_ps,
+    //         presence_penalties,
+    //         frequency_penalties,
+    //         repetition_penalties,
+    //         prompt_tokens,
+    //         output_tokens,
+    //     })
+    // }
 
-    pub fn from_sampling_metadata(
+    pub fn from_sampling_metadata<F: TensorCreator>(
         sampling_metadata: &SamplingMetadata,
         vocab_size: usize,
         device: &Device,
         dtype: DType,
-        base: &SamplingTensors,
+        tensor_creator: &mut F,
     ) -> candle_core::Result<(Self, bool, bool, bool)> {
         let mut prompt_tokens: Vec<Vec<u32>> = Vec::new();
         let mut output_tokens: Vec<Vec<u32>> = Vec::new();
@@ -170,26 +171,7 @@ impl SamplingTensors {
             repetition_penalties.extend_from_slice(&[r].repeat(seq_ids.len()));
             //tracing::info!("from_sampling_metadata 2:{:?}", start.elapsed());
         }
-        // tracing::info!(
-        //     "######do_penalties:{},do_top_p_top_k:{}, do_min_p:{}, temperatures_len:{}/{}/{}/{}/{}/{}/{}/{}/{}",
-        //     do_penalties,
-        //     do_top_p_top_k,
-        //     do_min_p,
-        //     temperatures.len(),
-        //     top_ps.len(),
-        //     top_ks.len(),
-        //     min_ps.len(),
-        //     presence_penalties.len(),
-        //     frequency_penalties.len(),
-        //     repetition_penalties.len(),
-        //     prompt_tokens.len(),
-        //     output_tokens.len(),
-        // );
-        // tracing::info!(
-        //     "prompt_tokens:{:?},output_tokens:{:?}",
-        //     prompt_tokens,
-        //     output_tokens
-        // );
+
         let s = SamplingTensors::from_list(
             temperatures,
             top_ps,
@@ -203,20 +185,14 @@ impl SamplingTensors {
             vocab_size,
             device,
             dtype,
-            base,
+            tensor_creator,
         )?;
         //tracing::info!("from_sampling_metadata 3:{:?}", start.elapsed());
         Ok((s, do_penalties, do_top_p_top_k, do_min_p))
-
-        // sampling_tensors = SamplingTensors.from_lists(
-        //     temperatures, top_ps, top_ks, min_ps, presence_penalties,
-        //     frequency_penalties, repetition_penalties, prompt_tokens,
-        //     output_tokens, vocab_size, device, dtype)
-        // return (sampling_tensors, do_penalties, do_top_p_top_k, do_min_p)
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn from_list(
+    fn from_list<F: TensorCreator>(
         temperatures: Vec<f32>,
         top_ps: Vec<f32>,
         top_ks: Vec<u32>,
@@ -229,7 +205,7 @@ impl SamplingTensors {
         vocab_size: usize,
         device: &Device,
         dtype: DType,
-        base: &SamplingTensors,
+        tensor_creator: &mut F,
     ) -> candle_core::Result<Self> {
         let start = std::time::Instant::now();
         let prompt_max_len = prompt_tokens.iter().map(|x| x.len()).max().unwrap();
@@ -243,102 +219,59 @@ impl SamplingTensors {
         let mut output_padded_tokens = Vec::new();
         for mut tokens in output_tokens {
             tokens.extend_from_slice(&[vocab_size as u32].repeat(output_max_len - tokens.len()));
-            // tracing::info!(
-            //     "tokens len:{},output_max_len:{},prompt_max_len:{}",
-            //     tokens.len(),
-            //     output_max_len,
-            //     prompt_max_len
-            // );
+
             if !tokens.is_empty() {
                 output_padded_tokens.push(tokens);
             }
         }
-        // tracing::info!("from_list 0:{:?}, {:?}", start.elapsed(), temperatures);
-        let cpu_device = Device::Cpu;
-        let temperatures_t = base.temperatures.i((..temperatures.len()))?;
-        let cpu_temperatures = Tensor::new(temperatures, &cpu_device)?.to_dtype(dtype)?;
-        tops::unsafe_tensor_htod_copy(&cpu_temperatures, &temperatures_t)?;
-        // let temperatures_t = Tensor::new(temperatures, device)?.to_dtype(dtype)?;
-        // tracing::info!(
-        //     "from_list 0.4:{:?}/{:?}/{:?}",
-        //     start.elapsed(),
-        //     temperatures_t.shape(),
-        //     temperatures_t.dtype(),
-        // );
-        // tracing::info!(
-        //     "from_list 0.4:{:?} {:?}",
-        //     start.elapsed(),
-        //     temperatures_t.shape()
-        // );
-        // let top_ps_t = Tensor::new(top_ps, device)?.to_dtype(dtype)?;
-        let top_ps_t = base.top_ps.i((..top_ps.len()))?;
-        let cpu_top_ps = Tensor::new(top_ps, &cpu_device)?.to_dtype(dtype)?;
-        tops::unsafe_tensor_htod_copy(&cpu_top_ps, &top_ps_t)?;
-        //tracing::info!("from_list 0.5:{:?}", start.elapsed());
 
-        //let min_ps_t = Tensor::new(min_ps, device)?.to_dtype(dtype)?;
-        let min_ps_t = base.min_ps.i((..min_ps.len()))?;
+        let cpu_device = Device::Cpu;
+        let cpu_temperatures = Tensor::new(temperatures, &cpu_device)?.to_dtype(dtype)?;
+        let temperatures_t = tensor_creator.like(&cpu_temperatures, device)?;
+        tops::unsafe_tensor_htod_copy(&cpu_temperatures, &temperatures_t)?;
+
+        let cpu_top_ps = Tensor::new(top_ps, &cpu_device)?.to_dtype(dtype)?;
+        let top_ps_t = tensor_creator.like(&cpu_top_ps, device)?;
+        tops::unsafe_tensor_htod_copy(&cpu_top_ps, &top_ps_t)?;
+
         let cpu_min_ps = Tensor::new(min_ps, &cpu_device)?.to_dtype(dtype)?;
+        let min_ps_t = tensor_creator.like(&cpu_min_ps, device)?;
         tops::unsafe_tensor_htod_copy(&cpu_min_ps, &min_ps_t)?;
 
-        //let presence_penalties_t = Tensor::new(presence_penalties, device)?.to_dtype(dtype)?;
-        let presence_penalties_t = base.presence_penalties.i((..presence_penalties.len()))?;
         let cpu_presence_penalties =
             Tensor::new(presence_penalties, &cpu_device)?.to_dtype(dtype)?;
+        let presence_penalties_t = tensor_creator.like(&cpu_presence_penalties, device)?;
         tops::unsafe_tensor_htod_copy(&cpu_presence_penalties, &presence_penalties_t)?;
 
-        //tracing::info!("from_list 0.6:{:?}", start.elapsed());
-        //let frequency_penalties_t = Tensor::new(frequency_penalties, device)?.to_dtype(dtype)?;
-        let frequency_penalties_t = base.frequency_penalties.i((..frequency_penalties.len()))?;
         let cpu_frequency_penalties =
             Tensor::new(frequency_penalties, &cpu_device)?.to_dtype(dtype)?;
+        let frequency_penalties_t = tensor_creator.like(&cpu_frequency_penalties, device)?;
         tops::unsafe_tensor_htod_copy(&cpu_frequency_penalties, &frequency_penalties_t)?;
-        //tracing::info!("from_list 0.7:{:?}", start.elapsed());
-        //let repetition_penalties_t = Tensor::new(repetition_penalties, device)?.to_dtype(dtype)?;
-        let repetition_penalties_t = base
-            .repetition_penalties
-            .i((..repetition_penalties.len()))?;
+
         let cpu_repetition_penalties =
             Tensor::new(repetition_penalties, &cpu_device)?.to_dtype(dtype)?;
+        let repetition_penalties_t = tensor_creator.like(&cpu_repetition_penalties, device)?;
         tops::unsafe_tensor_htod_copy(&cpu_repetition_penalties, &repetition_penalties_t)?;
-        //tracing::info!("from_list 0.8:{:?}", start.elapsed());
-        //let top_ks_t = Tensor::new(top_ks, device)?.to_dtype(DType::U32)?;
-        let top_ks_t = base.top_ks.i((..top_ks.len()))?;
+
         let cpu_top_ks = Tensor::new(top_ks, &cpu_device)?.to_dtype(DType::U32)?;
+        let top_ks_t = tensor_creator.like(&cpu_top_ks, device)?;
         tops::unsafe_tensor_htod_copy(&cpu_top_ks, &top_ks_t)?;
 
-        // tracing::info!("from_list 0.9:{:?}", start.elapsed());
-        //let prompt_tensor = Tensor::new(prompt_padded_tokens, device)?.to_dtype(DType::I64)?;
         let cpu_prompt_tensor =
             Tensor::new(prompt_padded_tokens, &cpu_device)?.to_dtype(DType::I64)?;
-        let prompt_tensor = base
-            .prompt_tokens
-            .i((..cpu_prompt_tensor.elem_count()))?
-            .reshape(cpu_prompt_tensor.shape())?;
+        let prompt_tensor = tensor_creator.like(&cpu_prompt_tensor, device)?;
         tops::unsafe_tensor_htod_copy(&cpu_prompt_tensor, &prompt_tensor)?;
-
-        // tracing::info!(
-        //     "from_list 1:{:?}/{:?}",
-        //     start.elapsed(),
-        //     prompt_tensor.shape()
-        // );
 
         let output_tensor = if output_padded_tokens.is_empty() {
             let empty: Vec<i64> = Vec::new();
             Tensor::from_vec(empty, (1, 0), device)?
         } else {
-            //Tensor::new(output_padded_tokens, device)?.to_dtype(DType::I64)?
             let cpu_output_tensor =
                 Tensor::new(output_padded_tokens, &cpu_device)?.to_dtype(DType::I64)?;
-            let output_tensor = base
-                .output_tokens
-                .i((..cpu_output_tensor.elem_count()))?
-                .reshape(cpu_output_tensor.shape())?;
+            let output_tensor = tensor_creator.like(&cpu_output_tensor, device)?;
             tops::unsafe_tensor_htod_copy(&cpu_output_tensor, &output_tensor)?;
             output_tensor
         };
-        // tracing::info!("temperatures_t:{:?},top_ps_t:{:?}", temperatures_t.shape(),top_ps_t.shape(),);
-        // tracing::info!("from_list 2:{:?}", start.elapsed());
 
         Ok(Self {
             temperatures: temperatures_t,

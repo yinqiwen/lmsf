@@ -17,16 +17,6 @@ extern "C" {
 pub fn cuda_cumsum(t: &Tensor, dim: usize, stream: CUstream) -> candle_core::Result<Tensor> {
     let mut default_creator = DefaultTensorCreator {};
     cuda_cumsum_(t, dim, &mut default_creator, stream)
-    // let out = Tensor::zeros(t.shape(), t.dtype(), t.device())?;
-    // let dim = get_column_major_dim(t.shape(), dim)?;
-
-    // let input_view = common::ffi::CTensorView::from(t, true)?;
-    // let output_view = common::ffi::CTensorView::from(&out, true)?;
-
-    // unsafe {
-    //     cuda_cumsum_tensor(input_view, dim as u32, stream, output_view);
-    // };
-    // Ok(out)
 }
 
 pub fn cuda_cumsum_<F: TensorCreator>(

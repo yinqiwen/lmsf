@@ -43,16 +43,6 @@ impl Drop for CublasWrapper {
 }
 
 impl CublasWrapper {
-    pub fn config(
-        trans_a: bool,
-        trans_b: bool,
-        dtype: DType,
-        min_input: Shape,
-        max_input: Shape,
-        weight: Shape,
-    ) {
-    }
-
     pub fn new(
         device: &Device,
         dtype: DType,
@@ -101,22 +91,6 @@ impl CublasWrapper {
         let input_view = CTensorView::from(input, false)?;
         let weight_view = CTensorView::from(weight, false)?;
         let output_view = CTensorView::from(&output, false)?;
-
-        // let (batch, num, tmp) = input.dims3()?;
-        // let (output_dims, _) = weight.dims2()?;
-        // //let output = Tensor::zeros((batch, num, output_dims), input.dtype(), input.device())?;
-        // let output = tensor_creator.new(
-        //     (batch, num, output_dims),
-        //     input.dtype(),
-        //     input.device(),
-        //     false,
-        // )?;
-        // let input_view = CTensorView::from(input, false)?;
-        // let weight_view = CTensorView::from(weight, false)?;
-        // let output_view = CTensorView::from(&output, false)?;
-
-        // let min_input_shape = Shape::from_dims(&[batch, num, tmp]);
-        // let max_input_shape = Shape::from_dims(&[8, num, tmp]);
 
         // println!("#####AA");
         let rc = unsafe { gemm_execute(self.wrapper, 0, 1, input_view, weight_view, output_view) };

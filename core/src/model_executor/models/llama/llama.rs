@@ -1,6 +1,6 @@
 use candle_core::{DType, Device, IndexOp, Result, Tensor, D};
 use candle_nn::{Embedding, Module, VarBuilder};
-use candle_transformers::models::with_tracing::{linear_no_bias as linear, Linear};
+// use candle_transformers::models::with_tracing::{linear_no_bias as linear, Linear};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -129,21 +129,21 @@ struct CausalSelfAttention {
     span_rot: tracing::Span,
 }
 
-#[cfg(feature = "flash-attn")]
-fn flash_attn(
-    q: &Tensor,
-    k: &Tensor,
-    v: &Tensor,
-    softmax_scale: f32,
-    causal: bool,
-) -> Result<Tensor> {
-    candle_flash_attn::flash_attn(q, k, v, softmax_scale, causal)
-}
+// #[cfg(feature = "flash-attn")]
+// fn flash_attn(
+//     q: &Tensor,
+//     k: &Tensor,
+//     v: &Tensor,
+//     softmax_scale: f32,
+//     causal: bool,
+// ) -> Result<Tensor> {
+//     candle_flash_attn::flash_attn(q, k, v, softmax_scale, causal)
+// }
 
-#[cfg(not(feature = "flash-attn"))]
-fn flash_attn(_: &Tensor, _: &Tensor, _: &Tensor, _: f32, _: bool) -> Result<Tensor> {
-    unimplemented!("compile with '--features flash-attn'")
-}
+// #[cfg(not(feature = "flash-attn"))]
+// fn flash_attn(_: &Tensor, _: &Tensor, _: &Tensor, _: f32, _: bool) -> Result<Tensor> {
+//     unimplemented!("compile with '--features flash-attn'")
+// }
 
 impl CausalSelfAttention {
     fn forward(
@@ -179,45 +179,8 @@ impl CausalSelfAttention {
         // }
 
         //rotary_emb accept shape [batch_size, seq_len, num_heads * head_size]
-        if log_enable {
-            // tracing::info!("before rotary_emb: positions:{}", positions.to_string());
-            // tracing::info!(
-            //     "before rotary_emb: q:{}/ {:?}/{:?}",
-            //     q.to_string(),
-            //     q.shape(),
-            //     q.stride()
-            // );
-            // tracing::info!(
-            //     "before rotary_emb: k:{}/{:?}/{:?}",
-            //     k.to_string(),
-            //     k.shape(),
-            //     k.stride()
-            // );
-            // tracing::info!(
-            //     "before rotary_emb: v:{}/{:?}/{:?}",
-            //     v.to_string(),
-            //     v.shape(),
-            //     v.stride()
-            // );
-            // tracing::info!(
-            //     "before rotary_emb: cos_sin_cache:{:?}",
-            //     self.rotary_emb.cos_sin_cache.to_string(),
-            // );
-            // todo!("aaa");
-        }
-        self.rotary_emb.forward(positions, &q, &k)?;
-        if log_enable {
-            // tracing::info!("before rotary_emb: positions:{}", positions.to_string());
-            // tracing::info!("after rotary_emb: q:{}", q.to_string());
-            // tracing::info!("after rotary_emb: k:{}", k.to_string());
-            // todo!("aaa");
-        }
 
-        if log_enable {
-            // tracing::info!("after rotary_emb: q:{}", q.to_string());
-            // tracing::info!("after rotary_emb: k:{}", k.to_string());
-            // todo!("aaa");
-        }
+        self.rotary_emb.forward(positions, &q, &k)?;
 
         let dtype = q.dtype();
 
@@ -233,10 +196,7 @@ impl CausalSelfAttention {
             log_enable,
             &mut default_creator,
         )?;
-        if log_enable {
-            // tracing::info!("after attn: :{}", attn_output.to_string());
-            // todo!("aaa");
-        }
+
         self.o_proj.forward(&attn_output)
     }
     fn forward_<F: TensorCreator>(
@@ -433,76 +393,76 @@ impl Mlp {
     }
 }
 
-struct Block {
-    rms_1: RmsNorm,
-    attn: CausalSelfAttention,
-    rms_2: RmsNorm,
-    mlp: Mlp,
-    span: tracing::Span,
-    idx: usize,
-}
+// struct Block {
+//     rms_1: RmsNorm,
+//     attn: CausalSelfAttention,
+//     rms_2: RmsNorm,
+//     mlp: Mlp,
+//     span: tracing::Span,
+//     idx: usize,
+// }
 
-impl Block {
-    fn forward(
-        &self,
-        x: &Tensor,
-        positions: &Tensor,
-        cache: Option<(&Tensor, &Tensor)>,
-        input_metadata: &mut InputMetadata,
-    ) -> Result<Tensor> {
-        let cuda_dev = match x.device() {
-            Device::Cuda(cuda) => cuda.clone(),
-            _ => {
-                candle_core::bail!("")
-            }
-        };
+// impl Block {
+//     fn forward(
+//         &self,
+//         x: &Tensor,
+//         positions: &Tensor,
+//         cache: Option<(&Tensor, &Tensor)>,
+//         input_metadata: &mut InputMetadata,
+//     ) -> Result<Tensor> {
+//         let cuda_dev = match x.device() {
+//             Device::Cuda(cuda) => cuda.clone(),
+//             _ => {
+//                 candle_core::bail!("")
+//             }
+//         };
 
-        let _enter = self.span.enter();
-        let residual = x;
-        let x = self.rms_1.forward(x)?;
-        // cuda_dev.synchronize();
-        // tracing::info!("Block 0 cost {:?}", start.elapsed(),);
-        // cuda_dev.synchronize();
-        // let start = std::time::Instant::now();
-        // let x = (self
-        //     .attn
-        //     .forward(&x, positions, input_metadata, cache, self.idx == 0)?
-        //     + residual)?;
-        let x = self
-            .attn
-            .forward(&x, positions, input_metadata, cache, self.idx == 0)?;
-        cuda_add_(&x, &residual)?;
-        // cuda_dev.synchronize();
-        // tracing::info!("Block attn cost {:?}", start.elapsed(),);
-        let residual = &x;
-        //let x = (self.mlp.forward(&self.rms_2.forward(&x)?)? + residual)?;
-        let x = self.mlp.forward(&self.rms_2.forward(&x)?, false)?;
-        cuda_add_(&x, &residual)?;
-        // cuda_dev.synchronize();
-        // tracing::info!("Block mlp cost {:?}", start.elapsed(),);
-        Ok(x)
-    }
+//         let _enter = self.span.enter();
+//         let residual = x;
+//         let x = self.rms_1.forward(x)?;
+//         // cuda_dev.synchronize();
+//         // tracing::info!("Block 0 cost {:?}", start.elapsed(),);
+//         // cuda_dev.synchronize();
+//         // let start = std::time::Instant::now();
+//         // let x = (self
+//         //     .attn
+//         //     .forward(&x, positions, input_metadata, cache, self.idx == 0)?
+//         //     + residual)?;
+//         let x = self
+//             .attn
+//             .forward(&x, positions, input_metadata, cache, self.idx == 0)?;
+//         cuda_add_(&x, &residual)?;
+//         // cuda_dev.synchronize();
+//         // tracing::info!("Block attn cost {:?}", start.elapsed(),);
+//         let residual = &x;
+//         //let x = (self.mlp.forward(&self.rms_2.forward(&x)?)? + residual)?;
+//         let x = self.mlp.forward(&self.rms_2.forward(&x)?, false)?;
+//         cuda_add_(&x, &residual)?;
+//         // cuda_dev.synchronize();
+//         // tracing::info!("Block mlp cost {:?}", start.elapsed(),);
+//         Ok(x)
+//     }
 
-    fn load(vb: VarBuilder, cache: &Cache, cfg: &Config, idx: usize) -> Result<Self> {
-        let span = tracing::span!(tracing::Level::TRACE, "block");
-        let attn = CausalSelfAttention::load(vb.pp("self_attn"), cache, cfg)?;
-        let mlp = Mlp::load(vb.pp("mlp"), cfg)?;
-        let rms_1 = RmsNorm::load(cfg.hidden_size, cfg.rms_norm_eps, vb.pp("input_layernorm"))?;
-        let rms_2 = RmsNorm::load(
-            cfg.hidden_size,
-            cfg.rms_norm_eps,
-            vb.pp("post_attention_layernorm"),
-        )?;
-        Ok(Self {
-            rms_1,
-            attn,
-            rms_2,
-            mlp,
-            span,
-            idx,
-        })
-    }
-}
+//     fn load(vb: VarBuilder, cache: &Cache, cfg: &Config, idx: usize) -> Result<Self> {
+//         let span = tracing::span!(tracing::Level::TRACE, "block");
+//         let attn = CausalSelfAttention::load(vb.pp("self_attn"), cache, cfg)?;
+//         let mlp = Mlp::load(vb.pp("mlp"), cfg)?;
+//         let rms_1 = RmsNorm::load(cfg.hidden_size, cfg.rms_norm_eps, vb.pp("input_layernorm"))?;
+//         let rms_2 = RmsNorm::load(
+//             cfg.hidden_size,
+//             cfg.rms_norm_eps,
+//             vb.pp("post_attention_layernorm"),
+//         )?;
+//         Ok(Self {
+//             rms_1,
+//             attn,
+//             rms_2,
+//             mlp,
+//             span,
+//             idx,
+//         })
+//     }
+// }
 
 struct Block2 {
     rms_1: vllm::RmsNorm,

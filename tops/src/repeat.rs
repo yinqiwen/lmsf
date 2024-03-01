@@ -7,8 +7,6 @@ use common::{
 
 use std::os::raw::{c_int, c_void};
 
-use crate::common::get_column_major_dim;
-
 extern "C" {
     fn cuda_repeat_tensor(
         input: CTensorView,
@@ -21,9 +19,70 @@ extern "C" {
     );
 }
 
+use common::{DefaultTensorCreator, TensorCreator};
+
 pub fn cuda_repeat<S: Into<Shape>>(
     t: &Tensor,
     s: S,
+    stream: CUstream,
+) -> candle_core::Result<Tensor> {
+    // let s = s.into();
+    // if s.dims().len() != t.dims().len() {
+    //     return Err(candle_core::Error::ShapeMismatchBinaryOp {
+    //         lhs: t.shape().clone(),
+    //         rhs: s,
+    //         op: "cuda_repeat",
+    //     }
+    //     .bt());
+    // }
+    // let mut dim0 = 1_usize;
+    // let mut dim1 = 1_usize;
+    // let dim2 = 1_usize;
+    // let dim3 = 1_usize;
+    // let output = if s.dims().len() == 1 {
+    //     dim0 = s.dims()[0];
+    //     Tensor::zeros(dim0 * t.dims1()?, t.dtype(), t.device())?
+    // } else if s.dims().len() == 2 {
+    //     dim0 = s.dims()[1];
+    //     dim1 = s.dims()[0];
+    //     let (tdim0, tdim1) = t.dims2()?;
+    //     Tensor::zeros(
+    //         (s.dims()[0] * tdim0, s.dims()[1] * tdim1),
+    //         t.dtype(),
+    //         t.device(),
+    //     )?
+    // } else {
+    //     return Err(candle_core::Error::UnexpectedNumberOfDims {
+    //         expected: 2,
+    //         got: s.dims().len(),
+    //         shape: s,
+    //     }
+    //     .bt());
+    // };
+
+    // let input_view = common::ffi::CTensorView::from(t, true)?;
+    // let output_view = common::ffi::CTensorView::from(&output, true)?;
+    // unsafe {
+    //     cuda_repeat_tensor(
+    //         input_view,
+    //         dim0 as i32,
+    //         dim1 as i32,
+    //         dim2 as i32,
+    //         dim3 as i32,
+    //         stream,
+    //         output_view,
+    //     );
+    // }
+    // Ok(output)
+
+    let mut default_creator = DefaultTensorCreator {};
+    cuda_repeat_(t, s, &mut default_creator, stream)
+}
+
+pub fn cuda_repeat_<S: Into<Shape>, F: TensorCreator>(
+    t: &Tensor,
+    s: S,
+    tensor_creator: &mut F,
     stream: CUstream,
 ) -> candle_core::Result<Tensor> {
     let s = s.into();
@@ -41,15 +100,22 @@ pub fn cuda_repeat<S: Into<Shape>>(
     let dim3 = 1_usize;
     let output = if s.dims().len() == 1 {
         dim0 = s.dims()[0];
-        Tensor::zeros(dim0 * t.dims1()?, t.dtype(), t.device())?
+        tensor_creator.new(dim0 * t.dims1()?, t.dtype(), t.device(), false)?
+        //Tensor::zeros(dim0 * t.dims1()?, t.dtype(), t.device())?
     } else if s.dims().len() == 2 {
         dim0 = s.dims()[1];
         dim1 = s.dims()[0];
         let (tdim0, tdim1) = t.dims2()?;
-        Tensor::zeros(
+        // Tensor::zeros(
+        //     (s.dims()[0] * tdim0, s.dims()[1] * tdim1),
+        //     t.dtype(),
+        //     t.device(),
+        // )?
+        tensor_creator.new(
             (s.dims()[0] * tdim0, s.dims()[1] * tdim1),
             t.dtype(),
             t.device(),
+            false,
         )?
     } else {
         return Err(candle_core::Error::UnexpectedNumberOfDims {

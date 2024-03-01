@@ -6,6 +6,7 @@ use candle_core::{
 };
 use candle_core::{Device, Tensor};
 use common::cuda_ext::get_tensor_cuda_device_ptr;
+use common::{DefaultTensorCreator, TensorCreator};
 
 use std::ops::Deref;
 
@@ -14,7 +15,7 @@ fn kernel_name(root: &str, dtype: DType) -> String {
     format!("{root}_{dtype}")
 }
 
-fn cuda_inplace_binary_op(a: &Tensor, b: &Tensor, op: &str) -> candle_core::Result<()> {
+fn cuda_inplace_binary_op(a: &Tensor, b: &Tensor, c: &Tensor, op: &str) -> candle_core::Result<()> {
     let device = match a.device() {
         Device::Cuda(cuda_dev) => cuda_dev,
         _ => {
@@ -31,20 +32,31 @@ fn cuda_inplace_binary_op(a: &Tensor, b: &Tensor, op: &str) -> candle_core::Resu
     let cfg = LaunchConfig::for_num_elems(elem_count as u32);
     let lhs = get_tensor_cuda_device_ptr(a)?;
     let rhs = get_tensor_cuda_device_ptr(b)?;
-    let out = lhs.clone();
+    let out = get_tensor_cuda_device_ptr(c)?;
     let params = (elem_count, dims.len(), &dims_and_strides, lhs, rhs, out);
     unsafe { func.launch(cfg, params) }.w()?;
     Ok(())
 }
 
 pub fn cuda_div_(a: &Tensor, b: &Tensor) -> candle_core::Result<()> {
-    cuda_inplace_binary_op(a, b, "bdiv")
+    cuda_inplace_binary_op(a, b, a, "bdiv")
 }
+pub fn cuda_div<F: TensorCreator>(
+    a: &Tensor,
+    b: &Tensor,
+    tensor_creator: &mut F,
+) -> candle_core::Result<Tensor> {
+    // cuda_inplace_binary_op(a, b, "bdiv")
+    let c = tensor_creator.like(a, a.device())?;
+    cuda_inplace_binary_op(a, b, &c, "bdiv")?;
+    Ok(c)
+}
+
 pub fn cuda_sub_(a: &Tensor, b: &Tensor) -> candle_core::Result<()> {
-    cuda_inplace_binary_op(a, b, "bsub")
+    cuda_inplace_binary_op(a, b, a, "bsub")
 }
 pub fn cuda_add_(a: &Tensor, b: &Tensor) -> candle_core::Result<()> {
-    cuda_inplace_binary_op(a, b, "badd")
+    cuda_inplace_binary_op(a, b, a, "badd")
 }
 
 #[test]

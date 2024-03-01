@@ -10,17 +10,16 @@ name = "llm_engine_example"
 
 [dependencies]
 lmsf-core = { path = "../core", package = "lmsf-core" }
+common = { path = "../common", package = "lmsf-common" }
+tops = { path = "../tops" }
 clap = { workspace = true }
 veil = "0.1"
-tracing = "0.1"
-tracing-subscriber = "0.3"
-tracing-appender = "0.2"
-anyhow = "1.0"
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+tracing-appender = { workspace = true }
+anyhow = { workspace = true }
 candle-core = { workspace = true }
 tokio = { workspace = true }
-# candle-ext = { workspace = true }
-tops = { path = "../tops" }
-# tch = "0.14.0"
 
 
 [build-dependencies]

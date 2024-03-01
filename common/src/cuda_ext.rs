@@ -64,3 +64,15 @@ pub fn get_tensor_cuda_device_ptr(tensor: &Tensor) -> candle_core::Result<CudaDe
     };
     Ok(CudaDevicePtr { ptr: ptr_int })
 }
+
+pub fn cuda_profiler_start() {
+    unsafe {
+        sys::cuProfilerStart();
+    }
+}
+
+pub fn cuda_profiler_stop() {
+    unsafe {
+        sys::cuProfilerStop();
+    }
+}

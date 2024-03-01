@@ -8,7 +8,8 @@ use lmsf_core::{
 
 async fn async_run(args: &EngineArgs) -> anyhow::Result<()> {
     let (model_cfg, cache_cfg, parallel_cfg, sched_cfg) = args.create_engine_configs()?;
-    let runner = AsyncLLMEngine::new(model_cfg, cache_cfg, parallel_cfg, sched_cfg).await;
+    let runner = AsyncLLMEngine::new(model_cfg, cache_cfg, parallel_cfg, sched_cfg, true).await;
+
     let mut sampling_params = SamplingParams::default();
     sampling_params.temperature = 0.8;
     sampling_params.top_k = 5;
@@ -47,6 +48,7 @@ async fn async_run(args: &EngineArgs) -> anyhow::Result<()> {
                 }
             }
         }
+
         println!("\n[{}]cost {:?}!", i, start.elapsed());
     }
 
@@ -65,9 +67,7 @@ fn run(args: &EngineArgs) -> anyhow::Result<()> {
     sampling_params.max_tokens = 128;
     let max_tokens = sampling_params.max_tokens;
 
-    let arrival_time = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap();
+    let arrival_time = std::time::Instant::now();
     let request_id = 0_u64;
     // engine.add_request(
     //     request_id,
@@ -113,33 +113,33 @@ fn run(args: &EngineArgs) -> anyhow::Result<()> {
         // }
         for req_out in outputs {
             for out in req_out.outputs {
-                tracing::info!("{}:gen text:{}", req_out.request_id, out.text);
+                //tracing::info!("{}:gen text:{}", req_out.request_id, out.text);
             }
         }
     }
     tracing::info!("End cost {:?} to gen {} tokens", start.elapsed(), count);
 
-    // engine.add_request(
-    //     request_id + 3,
-    //     "To be or not to be, ",
-    //     sampling_params,
-    //     None,
-    //     arrival_time,
-    // )?;
-    // let start = std::time::Instant::now();
-    // while engine.has_unfinished_requests() {
-    //     let outputs = engine.step()?;
-    //     count += 1;
-    //     // if count == 4 {
-    //     //     break;
-    //     // }
-    //     for req_out in outputs {
-    //         for out in req_out.outputs {
-    //             tracing::info!("gen text:{}", out.text);
-    //         }
-    //     }
-    // }
-    // tracing::info!("End cost {:?} to gen {} tokens", start.elapsed(), count);
+    engine.add_request(
+        request_id + 3,
+        "To be or not to be, ",
+        sampling_params,
+        None,
+        arrival_time,
+    )?;
+    let start = std::time::Instant::now();
+    while engine.has_unfinished_requests() {
+        let outputs = engine.step()?;
+        count += 1;
+        // if count == 4 {
+        //     break;
+        // }
+        for req_out in outputs {
+            for out in req_out.outputs {
+                //tracing::info!("gen text:{}", out.text);
+            }
+        }
+    }
+    tracing::info!("End cost {:?} to gen {} tokens", start.elapsed(), count);
     Ok(())
 }
 
@@ -147,7 +147,8 @@ fn run(args: &EngineArgs) -> anyhow::Result<()> {
 async fn main() {
     let args = EngineArgs::parse();
 
-    tracing_subscriber::fmt::init();
+    //tracing_subscriber::fmt::init();
+    common::init_tracing(None, true);
 
     let current_dir = std::env::current_dir().unwrap();
     tracing::info!("Working dir:{:?}:", current_dir);

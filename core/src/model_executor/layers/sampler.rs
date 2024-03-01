@@ -6,6 +6,7 @@ use std::{
 use candle_core::{DType, Device, IndexOp, Tensor, D};
 // use candle_ext::F;
 use clap::ArgAction;
+// use common::cuda_ext;
 
 use crate::{
     common::{
@@ -18,7 +19,7 @@ use crate::{
     },
     model_executor::ops::tensor::masked_fill_neg_inf,
     model_executor::sampling_metadata::{SamplingMetadata, SamplingTensors},
-    tensor::{cuda_gt, cuda_scatter_add, cuda_sub_, cuda_tensor_ones, TensorArena},
+    tensor::{cuda_div, cuda_gt_, cuda_scatter_add, cuda_sub_, cuda_tensor_ones, TensorArena},
 };
 
 fn get_bin_counts_and_mask(
@@ -29,35 +30,16 @@ fn get_bin_counts_and_mask(
 ) -> candle_core::Result<(Tensor, Tensor)> {
     //let bin_counts = Tensor::zeros((num_seqs, vocab_size + 1), DType::I64, tokens.device())?;
     let bin_counts = cache.get(DType::I64, (num_seqs, vocab_size + 1), true)?;
-    //bin_counts.scatter_add(indexes, source, dim)
-    // let scatter_src = if tokens.elem_count() == 0 {
-    //     tokens = tokens.reshape((num_seqs, 0))?;
-    //     let empty: Vec<i64> = Vec::new();
-    //     Tensor::from_vec(empty, (num_seqs, 0), tokens.device())?
-    // } else {
-    //     //Tensor::ones_like(&tokens)?
-    //     let t = cache.get(tokens.dtype(), tokens.shape(), false)?;
-    //     cuda_tensor_ones(&t)?;
-    //     t
-    // };
-    // println!(
-    //     "bin_counts :{:?}, tokens:{:?},scatter_src:{:?}",
-    //     bin_counts.shape(),
-    //     tokens.shape(),
-    //     scatter_src.shape(),
-    // );
-    // let scatter_src = Tensor::ones_like(&tokens)?;
-    //let bin_counts = bin_counts.scatter_add(&tokens, &scatter_src, 1)?;
+
     if tokens.elem_count() > 0 {
         let scatter_src = cache.get(tokens.dtype(), tokens.shape(), false)?;
         cuda_tensor_ones(&scatter_src)?;
         cuda_scatter_add(&bin_counts, &tokens, &scatter_src, 1)?;
     }
-    // cuda_scatter_add(&bin_counts, &tokens, &scatter_src, 1)?;
 
     let bin_counts = bin_counts.i((.., ..vocab_size))?;
-    let mask = cache.get(DType::U8, bin_counts.shape(), false)?;
-    cuda_gt(&bin_counts, 0_i64, &mask)?;
+    //let mask = cache.get(DType::U8, bin_counts.shape(), false)?;
+    let mask = cuda_gt_(&bin_counts, 0_i64, cache)?;
     //let mask = bin_counts.gt(0_i64)?;
     Ok((bin_counts, mask))
 }
@@ -75,68 +57,83 @@ fn apply_penalties(
     let (num_seqs, vocab_size) = logits.shape().dims2()?;
     let (_, prompt_mask) =
         get_bin_counts_and_mask(cache, prompt_tokens_tensor, vocab_size, num_seqs)?;
-    // tracing::info!(
-    //     "apply_penalties 0 cost {:?}/{:?}",
-    //     start.elapsed(),
-    //     prompt_mask.shape()
-    // );
-
     let (output_bin_counts, output_mask) =
         get_bin_counts_and_mask(cache, output_tokens_tensor, vocab_size, num_seqs)?;
 
     let repetition_penalties = repetition_penalties.unsqueeze(D::Minus1)?;
-    // tracing::info!(
-    //     "apply_penalties 0.5 cost {:?}, {:?}/{:?}",
-    //     start.elapsed(),
-    //     repetition_penalties.shape(),
-    //     repetition_penalties.to_string()
-    // );
-    //let repetition_penalties = repetition_penalties.repeat((1, vocab_size))?;
 
-    let repetition_penalties =
-        tops::cuda_repeat(&repetition_penalties, (1, vocab_size), std::ptr::null_mut())?;
-    // tracing::info!("apply_penalties 1 cost {:?}", start.elapsed());
+    let repetition_penalties = tops::cuda_repeat_(
+        &repetition_penalties,
+        (1, vocab_size),
+        cache,
+        std::ptr::null_mut(),
+    )?;
 
-    // todo optimize (py: repetition_penalties[~(prompt_mask | output_mask)] = 1.0)
+    // py: repetition_penalties[~(prompt_mask | output_mask)] = 1.0
     let repetition_penalties_cond = prompt_mask.where_cond(&prompt_mask, &output_mask)?;
     let repetition_penalties_tmp = Tensor::ones_like(&repetition_penalties)?;
-
     let repetition_penalties =
         repetition_penalties_cond.where_cond(&repetition_penalties, &repetition_penalties_tmp)?;
-    // tracing::info!("apply_penalties 2 cost {:?}", start.elapsed());
 
-    let cond = logits.gt(0_i64)?;
-    let true_logits = logits.div(&repetition_penalties)?;
-    let false_logits = logits.mul(&repetition_penalties)?;
-
-    // # We follow the definition in OpenAI API.
-    // # Refer to https://platform.openai.com/docs/api-reference/parameter-details
+    //py: logits = torch.where(logits > 0, logits / repetition_penalties,logits * repetition_penalties)
+    //let cond = logits.gt(0_i64)?;
+    let cond = cuda_gt_(&logits, 0_i64, cache)?;
+    //let true_logits = logits.div(&repetition_penalties)?;
+    let true_logits = cuda_div(&logits, &repetition_penalties, cache)?;
+    //let false_logits = logits.mul(&repetition_penalties)?;
+    let false_logits =
+        tops::cuda_tensor_mul_(&logits, &&repetition_penalties, logits.dtype(), cache)?;
     let logits = cond.where_cond(&true_logits, &false_logits)?;
-    // tracing::info!("apply_penalties 3 cost {:?}", start.elapsed());
-
-    let frequency_penalties = frequency_penalties.unsqueeze(1)?;
-    let output_bin_counts = output_bin_counts
-        .to_dtype(DType::F32)?
-        .to_dtype(frequency_penalties.dtype())?;
-    let output_mask = output_mask.to_dtype(presence_penalties.dtype())?;
-    // tracing::info!("apply_penalties 4 cost {:?}", start.elapsed());
-
-    let logits = logits.sub(
-        &(frequency_penalties
-            .broadcast_as(output_bin_counts.shape())?
-            .mul(&output_bin_counts)?),
-    )?;
-
-    let presence_penalties = presence_penalties.unsqueeze(1)?;
-
-    let logits = logits.sub(
-        &(presence_penalties
-            .broadcast_as(output_mask.shape())?
-            .mul(&output_mask)?),
-    )?;
 
     // logits -= frequency_penalties.unsqueeze_(dim=1) * output_bin_counts
+    let frequency_penalties = frequency_penalties.unsqueeze(1)?;
+    // let output_bin_counts = output_bin_counts
+    //     .to_dtype(DType::F32)?
+    //     .to_dtype(frequency_penalties.dtype())?;
+    // let logits = logits.sub(&(frequency_penalties.broadcast_mul(&output_bin_counts)?))?;
+    // let logits = logits.sub(&tops::cuda_tensor_broadcast_mul_(
+    //     &frequency_penalties,
+    //     &output_bin_counts,
+    //     logits.dtype(),
+    //     cache,
+    // )?)?;
+
+    cuda_sub_(
+        &logits,
+        &tops::cuda_tensor_broadcast_mul_(
+            &frequency_penalties,
+            &output_bin_counts,
+            logits.dtype(),
+            cache,
+        )?,
+    )?;
+    // cuda_sub_(
+    //     &logits,
+    //     &(frequency_penalties.broadcast_mul(&output_bin_counts)?),
+    // )?;
+
     // logits -= presence_penalties.unsqueeze_(dim=1) * output_mask
+    // let output_mask = output_mask.to_dtype(presence_penalties.dtype())?;
+    let presence_penalties = presence_penalties.unsqueeze(1)?;
+    // let logits = logits.sub(&(presence_penalties.broadcast_mul(&output_mask)?))?;
+    // let logits = logits.sub(&tops::cuda_tensor_broadcast_mul_(
+    //     &presence_penalties,
+    //     &output_mask,
+    //     logits.dtype(),
+    //     cache,
+    // )?)?;
+    cuda_sub_(
+        &logits,
+        &tops::cuda_tensor_broadcast_mul_(
+            &presence_penalties,
+            &output_mask,
+            logits.dtype(),
+            cache,
+        )?,
+    )?;
+
+    // cuda_sub_(&logits, &(presence_penalties.broadcast_mul(&output_mask)?))?;
+
     // tracing::info!("apply_penalties all cost {:?}", start.elapsed());
     Ok(logits)
 }
@@ -147,68 +144,68 @@ fn apply_top_p_top_k(
     p: Tensor,
     k: Tensor,
 ) -> candle_core::Result<Tensor> {
-    //let logits_sort = logits;
-    // let cuda_dev = match logits.device() {
-    //     Device::Cuda(cuda) => cuda.clone(),
-    //     _ => {
-    //         candle_core::bail!("")
-    //     }
-    // };
-    //cuda_dev.synchronize();
-    let start = std::time::Instant::now();
     let dim = logits.shape().dims().len() - 1;
+    let start = std::time::Instant::now();
 
     let (logits_sort, logits_idx) =
         tops::cuda_sort_(logits, dim, true, arena, std::ptr::null_mut())?;
-    // logits_sort, logits_idx = logits.sort(dim=-1, descending=True)
-    // cuda_dev.synchronize();
     // tracing::info!(
-    //     "apply_top_p_top_k sort cost {:?} {:?}",
+    //     "After cuda_sort_ elapsed:{:?}/{:?}",
     //     start.elapsed(),
     //     logits_sort.dtype()
     // );
-
-    // let probs_sort = candle_nn::ops::softmax(&logits_sort, D::Minus1)?;
     let probs_sort = tops::cuda_softmax_(&logits_sort, D::Minus1, arena, std::ptr::null_mut())?;
-    // let probs_sort = probs_sort.to_dtype(logits_sort.dtype())?;
-    // cuda_dev.synchronize();
-    // tracing::info!("apply_top_p_top_k 0 cost {:?}", start.elapsed());
-
-    // let probs_sum = probs_sort.cumsum(D::Minus1)?.sub(&probs_sort)?;
+    // tracing::info!("After cuda_softmax_ elapsed:{:?}", start.elapsed());
     let probs_sum = tops::cuda_cumsum_(&probs_sort, 1, arena, std::ptr::null_mut())?;
+    // tracing::info!("After cuda_cumsum_ elapsed:{:?}", start.elapsed());
     cuda_sub_(&probs_sum, &probs_sort)?;
-    // let probs_sum =
-    //     tops::cuda_cumsum_(&probs_sort, 1, arena, std::ptr::null_mut())?.sub(&probs_sort)?;
-    // tracing::info!("after cumsum:{:?}", probs_sum.to_string());
+
+    // tracing::info!("After cuda_sub_ elapsed:{:?}", start.elapsed());
+
     let p = p.unsqueeze(1)?;
     let top_p_mask = probs_sum.broadcast_gt(&p)?;
-    // tracing::info!("top_p_mask:{:?}", top_p_mask.to_string());
 
-    // cuda_dev.synchronize();
-    // tracing::info!("apply_top_p_top_k 1 cost {:?}", start.elapsed());
     let logits_idx_end = *(logits_idx.shape().dims().last().unwrap());
-    let top_k_mask = Tensor::arange(0_u32, logits_idx_end as u32, logits_idx.device())?;
+    // let top_k_mask = Tensor::arange(0_u32, logits_idx_end as u32, logits_idx.device())?;
+    let top_k_mask = tops::cuda_arange_(
+        0_u32,
+        logits_idx_end as u32,
+        logits_idx.device(),
+        arena,
+        std::ptr::null_mut(),
+    )?;
+    // tracing::info!(
+    //     "After arange elapsed:{}:{:?}",
+    //     logits_idx_end,
+    //     start.elapsed()
+    // );
     let new_shape = (logits_idx.shape().dims()[0], top_k_mask.shape().dims()[0]);
     let top_k_mask = top_k_mask.expand(new_shape)?;
+    // tracing::info!("After expand elapsed:{:?}", start.elapsed());
     let k = k.unsqueeze(1)?;
     let top_k_mask = top_k_mask.broadcast_ge(&k)?;
-    // tracing::info!("top_k_mask:{:?}", top_k_mask.to_string());
-    // cuda_dev.synchronize();
+    // tracing::info!("After broadcast_ge elapsed:{:?}", start.elapsed());
 
-    let mask = top_p_mask.where_cond(&top_p_mask, &top_k_mask)?; // mask = (top_p_mask | top_k_mask)
+    // mask = (top_p_mask | top_k_mask)
+    let mask = top_p_mask.where_cond(&top_p_mask, &top_k_mask)?;
     let logits_sort = masked_fill_neg_inf(&logits_sort, &mask)?;
-    // cuda_dev.synchronize();
-    // tracing::info!("apply_top_p_top_k 2.0 cost {:?}", start.elapsed());
-    let src = Tensor::arange(0_u32, logits_idx_end as u32, logits_idx.device())?
-        .expand(logits_idx.shape())?
-        .contiguous()?;
+
+    // tracing::info!("After where elapsed:{:?}", start.elapsed());
+    let src = tops::cuda_arange_(
+        0_u32,
+        logits_idx_end as u32,
+        logits_idx.device(),
+        arena,
+        std::ptr::null_mut(),
+    )?;
+    let src = src.expand(logits_idx.shape())?.contiguous()?;
+    // let src = Tensor::arange(0_u32, logits_idx_end as u32, logits_idx.device())?
+    //     .expand(logits_idx.shape())?
+    //     .contiguous()?;
 
     //let logits_idx_inv = Tensor::zeros_like(&logits_idx)?;
     let logits_idx_inv = arena.get(logits_idx.dtype(), logits_idx.shape(), true)?;
-    // cuda_dev.synchronize();
-    // cuda_dev.synchronize();
-    // tracing::info!("apply_top_p_top_k 2 cost {:?}", start.elapsed());
-    let start = std::time::Instant::now();
+
     tops::cuda_scatter(
         &logits_idx_inv,
         &logits_idx,
@@ -216,35 +213,9 @@ fn apply_top_p_top_k(
         D::Minus1,
         std::ptr::null_mut(),
     )?;
-    // let logits_idx_inv = candle_ext::F::scatter(&logits_idx_inv, &logits_idx, &src, D::Minus1)?;
-    // cuda_scatter_add(&logits_idx_inv, &logits_idx, &src, D::Minus1)?;
-    //let logits_idx_inv = logits_idx_inv.scatter_add(&logits_idx, &src, D::Minus1)?;
-    // cuda_dev.synchronize();
-    // tracing::info!(
-    //     "apply_top_p_top_k 3 cost {:?}, {:?}/{:?}/{:?}",
-    //     start.elapsed(),
-    //     logits_idx_inv.shape(),
-    //     logits_idx.shape(),
-    //     src.shape()
-    // );
+    // tracing::info!("After cuda_scatter elapsed:{:?}", start.elapsed());
     let logits = logits_sort.gather(&logits_idx_inv, D::Minus1)?;
-    // cuda_dev.synchronize();
-    // tracing::info!("apply_top_p_top_k 4 cost {:?}", start.elapsed());
-    // let x = logits.to_vec2::<half::f16>()?;
-    // for v0 in x {
-    //     for (idx, v1) in v0.iter().enumerate() {
-    //         if *v1 != half::f16::NEG_INFINITY {
-    //             tracing::info!("idx:{}, val:{}", idx, *v1);
-    //         }
-    //     }
-    // }
-    // tracing::info!(
-    //     "apply_top_p_top_k logits:{:?}/{:?}",
-    //     logits.shape(),
-    //     logits.to_string()
-    // );
 
-    // todo!("sort unimplement")
     Ok(logits)
 }
 
@@ -783,7 +754,7 @@ fn build_sampler_output(
 
 pub struct Sampler {
     // vocab_size: usize,
-    base_tensor_buffer: SamplingTensors,
+    // base_tensor_buffer: SamplingTensors,
     // cache: TensorCache,
     arena: TensorArena,
 }
@@ -795,14 +766,14 @@ impl Sampler {
         dtype: DType,
         device: &Device,
     ) -> candle_core::Result<Self> {
-        let base_tensor_buffer =
-            SamplingTensors::allocate_base_buffer(max_batch, max_model_len, dtype, device)?;
+        // let base_tensor_buffer =
+        //     SamplingTensors::allocate_base_buffer(max_batch, max_model_len, dtype, device)?;
         // let mut cache = TensorCache::new();
         // cache.fill(DType::I64, 1024 * 32, device)?;
         // cache.fill(DType::U8, 1024 * 32, device)?;
         // cache.fill(DType::F16, 1024 * 32, device)?;
         Ok(Self {
-            base_tensor_buffer,
+            // base_tensor_buffer,
             // cache,
             arena: TensorArena::new(device),
         })
@@ -816,12 +787,15 @@ impl Sampler {
         // tracing::info!("sample logits:{}", logits.to_string());
         // self.cache.reset();
         self.arena.reset();
+        // self.arena.print_stat();
         let cuda_dev = match logits.device() {
             Device::Cuda(cuda) => cuda.clone(),
             _ => {
                 candle_core::bail!("")
             }
         };
+        // cuda_dev.synchronize();
+
         let (_, vocab_size) = logits.shape().dims2()?;
         if !sampling_metadata.perform_sampling {
             return Ok(None);
@@ -834,7 +808,7 @@ impl Sampler {
                 vocab_size,
                 logits.device(),
                 logits.dtype(),
-                &self.base_tensor_buffer,
+                &mut self.arena,
             )?;
         // tracing::info!("sample 0 cost {:?}/{}", start.elapsed(), do_penalties);
 
@@ -854,10 +828,9 @@ impl Sampler {
         // # Apply temperature scaling.
         // # Use in-place division to avoid creating a new tensor.
         let temperatures = sampling_tensors.temperatures.unsqueeze(1)?;
-
         let mut logits = logits.broadcast_div(&temperatures)?;
         // cuda_dev.synchronize();
-        // tracing::info!("sample 1.5 cost {:?}", start.elapsed());
+        // tracing::info!("sample 1.5 cost {:?}, {}", start.elapsed(), do_min_p);
         if do_top_p_top_k {
             //apply_top_p_top_k();
             logits = apply_top_p_top_k(

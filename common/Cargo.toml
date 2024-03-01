@@ -5,9 +5,11 @@ edition = "2021"
 
 
 [dependencies]
-libc = "0.2"
-candle-core = { version = "0.3.2" }
-half = "2.3.1"
+libc = { workspace = true }
+candle-core = { workspace = true }
+half = { workspace = true }
+tracing-appender = { workspace = true }
+tracing-subscriber = { workspace = true }
 
 [build-dependencies]
 anyhow = { version = "1", features = ["backtrace"] }

@@ -56,7 +56,10 @@ impl Linear {
 
         match &self.bias {
             None => Ok(x1),
-            Some(bias) => x1.broadcast_add(bias),
+            Some(bias) => {
+                //println!("####with bias");
+                x1.broadcast_add(bias)
+            }
         }
     }
 }

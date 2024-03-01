@@ -76,13 +76,8 @@ pub fn cuda_scatter_add<D: Dim>(
     let dst_dim_sz = dst.dims()[dim];
     let cfg = LaunchConfig::for_num_elems((left_sz * right_sz) as u32);
     let dst = get_tensor_cuda_device_ptr(dst)?;
-    //let dst = DeviceDataPtr::new(dst_ptr);
     let ids = get_tensor_cuda_device_ptr(index)?;
-    // let ids_ptr = unsafe { ids_ptr.add(ids_o1 * index.dtype().size_in_bytes()) };
-    //let ids = DeviceDataPtr::new(ids_ptr);
     let src = get_tensor_cuda_device_ptr(src)?;
-    // let src_ptr = unsafe { src_ptr.add(src_o1 * src.dtype().size_in_bytes()) };
-    //let src = DeviceDataPtr::new(src_ptr);
 
     let params = (ids, src, dst, left_sz, src_dim_sz, dst_dim_sz, right_sz);
     // SAFETY: ffi.

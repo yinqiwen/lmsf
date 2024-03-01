@@ -13,7 +13,10 @@ mod openai;
 #[tokio::main]
 async fn main() {
     let args = EngineArgs::parse();
-    tracing_subscriber::fmt::init();
+    common::init_tracing(
+        args.log_dir.as_ref().map(|x| x.as_str()),
+        args.alsologtostderr,
+    );
 
     let (model_cfg, cache_cfg, parallel_cfg, sched_cfg) = match args.create_engine_configs() {
         Ok((model_cfg, cache_cfg, parallel_cfg, sched_cfg)) => {
@@ -25,7 +28,7 @@ async fn main() {
         }
     };
     // let (model_cfg, cache_cfg, parallel_cfg, sched_cfg) = args.create_engine_configs()?;
-    let engine = AsyncLLMEngine::new(model_cfg, cache_cfg, parallel_cfg, sched_cfg).await;
+    let engine = AsyncLLMEngine::new(model_cfg, cache_cfg, parallel_cfg, sched_cfg, false).await;
 
     // build our application with a route
     let app = Router::new()

@@ -9,6 +9,10 @@ pub trait TensorCreator {
         zero: bool,
     ) -> candle_core::Result<Tensor>;
 
+    fn like(&mut self, t: &Tensor, device: &Device) -> candle_core::Result<Tensor> {
+        self.new(t.shape(), t.dtype(), device, false)
+    }
+
     fn default() -> DefaultTensorCreator {
         DefaultTensorCreator {}
     }

@@ -22,8 +22,8 @@ candle-flash-attn = { workspace = true, optional = true }
 half = { workspace = true }
 minijinja = { workspace = true }
 uuid = { workspace = true }
-cudarc = { version = "0.9.14", features = ["f16"], optional = true }
 serde_json = { workspace = true }
+candle-ext = { workspace = true }
 
 tokenizers = { version = "0.13.4", default-features = false, features = [
     "onig",

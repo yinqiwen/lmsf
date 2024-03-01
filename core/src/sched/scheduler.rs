@@ -436,9 +436,7 @@ impl Scheduler {
         // # to keep all the sequence groups in the RUNNING state.
         // # In this case, the policy is responsible for deciding which sequence
         // # groups to preempt.
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap();
+        let now = std::time::Instant::now();
         self.policy
             .sort_by_priority(now, &mut self.seq_group_queues[Scheduler::RUNNING]);
 

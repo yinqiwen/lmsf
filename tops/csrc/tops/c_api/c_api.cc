@@ -44,6 +44,20 @@ cudaDeviceProp *getCudaDeviceProp() {
   }
   return default_props;
 }
+
+void *get_temp_buffer(size_t n) {
+  static void *tmp_buffer = nullptr;
+  static size_t tmp_buffer_size = 0;
+  if (tmp_buffer_size < n) {
+    if (nullptr != tmp_buffer) {
+      cudaFree(tmp_buffer);
+    }
+    cudaMalloc(&tmp_buffer, n);
+    tmp_buffer_size = n;
+  }
+  return tmp_buffer;
+}
+
 size_t get_tensor_element_count(const CTensorView *tensor) {
   return tensor->shape[0] * tensor->shape[1] * tensor->shape[2] * tensor->shape[3];
 }

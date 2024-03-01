@@ -4,7 +4,7 @@ use candle_core::{DType, Device, IndexOp, Shape, Tensor};
 use common::TensorCreator;
 use metrics::atomics::AtomicU64;
 
-const DEFAULT_MIN_BLOCK_SIZE: usize = 4096;
+const DEFAULT_MIN_BLOCK_SIZE: usize = 1024 * 1024;
 const ALLIGNMENT: usize = 64;
 struct TensorArenaUnit {
     cache: Tensor,
@@ -78,6 +78,10 @@ impl TensorArenaUnitGroup {
     pub fn len(&self) -> usize {
         self.group.len()
     }
+
+    pub fn capacity(&self) -> usize {
+        self.group.iter().map(|x| x.capacity).sum()
+    }
     pub fn cursor(&self) -> usize {
         match self.group.last() {
             Some(c) => c.curosr.load(std::sync::atomic::Ordering::SeqCst) as usize,
@@ -85,9 +89,14 @@ impl TensorArenaUnitGroup {
         }
     }
 
-    fn do_get(&mut self, dtype: DType, shape: &Shape, zero: bool) -> candle_core::Result<Tensor> {
-        let curosr = self.cursor.load(std::sync::atomic::Ordering::SeqCst);
-
+    fn do_get(
+        &mut self,
+        curosr: usize,
+        dtype: DType,
+        shape: &Shape,
+        zero: bool,
+    ) -> candle_core::Result<Tensor> {
+        // println!("####{} {}", curosr, self.group.len());
         if curosr < self.group.len() {
             match self.group[curosr].get(dtype, shape, zero) {
                 Ok(s) => {
@@ -107,31 +116,40 @@ impl TensorArenaUnitGroup {
         device: &Device,
     ) -> candle_core::Result<Tensor> {
         let shape = shape.into();
-        match self.do_get(dtype, &shape, zero) {
-            Ok(s) => {
-                return Ok(s);
+        let mut curosr = self.cursor.load(std::sync::atomic::Ordering::SeqCst);
+        while curosr < self.group.len() {
+            match self.do_get(curosr, dtype, &shape, zero) {
+                Ok(s) => {
+                    return Ok(s);
+                }
+                Err(_) => {
+                    curosr += 1;
+                }
             }
-            Err(_) => {}
         }
-        //create new block
+        if curosr > self.group.len() {
+            curosr = self.group.len();
+        }
+        self.cursor
+            .store(curosr, std::sync::atomic::Ordering::SeqCst);
 
         let n = shape.elem_count();
-
         let allign_n = (n + ALLIGNMENT - 1) / ALLIGNMENT * ALLIGNMENT;
         let new_block_len = if allign_n > self.min_block_size {
             allign_n
         } else {
             self.min_block_size
         };
+        // println!(
+        //     "###need new arena for {:?} with n:{}, allign_n:{}, new_block_len:{}, at size:{}, cursor:{}",
+        //     dtype, n, allign_n,new_block_len, self.group.len(), self.cursor.load(std::sync::atomic::Ordering::SeqCst)
+        // );
         //println!("create with n:{}/{}/{}", new_block_len, allign_n, n);
         let segment = TensorArenaUnit::new(new_block_len, dtype, device)?;
         self.group.push(segment);
-        if self.group.len() > 1 {
-            self.cursor
-                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        }
-
-        self.do_get(dtype, &shape, zero)
+        // self.cursor
+        //     .store(curosr + 1, std::sync::atomic::Ordering::SeqCst);
+        self.do_get(curosr, dtype, &shape, zero)
     }
 }
 
@@ -162,6 +180,20 @@ impl TensorArena {
         let idx = dtype as usize;
         let cache = &self.cache[idx];
         (cache.len(), cache.cursor())
+    }
+
+    pub fn print_stat(&self) {
+        tracing::info!("TensorArena stat:");
+        for cache in &self.cache {
+            tracing::info!(
+                "CacheGroup Curosr:{}, Size:{}, capacity:{}",
+                cache.cursor.load(std::sync::atomic::Ordering::SeqCst),
+                cache.group.len(),
+                cache.capacity()
+            );
+
+            //tracing::info!("TensorArena stat:);
+        }
     }
 
     pub fn reset(&self) {
@@ -206,14 +238,14 @@ fn test_arena() -> candle_core::Result<()> {
     let device = Device::new_cuda(0)?;
     let mut arena = TensorArena::new(&device);
 
-    let t0 = arena.get(DType::F16, (1, 5), false)?;
-    let t1 = arena.get(DType::F16, (2, 5), false)?;
-    println!("fp16 arena stat: {:?}", arena.stat(DType::F16));
-    arena.reset();
-    println!("after reset fp16 arena stat: {:?}", arena.stat(DType::F16));
-    let t0 = arena.get(DType::F16, (1, 5), false)?;
-    let t1 = arena.get(DType::F16, (2, 5), false)?;
     let t1 = arena.get(DType::F16, (1, 32000), false)?;
-    println!(" fp16 arena stat: {:?}", arena.stat(DType::F16));
+    let t1 = arena.get(DType::F16, (1, 32000), false)?;
+    arena.reset();
+    arena.print_stat();
+
+    let t1 = arena.get(DType::F16, (1, 32000), false)?;
+    let t1 = arena.get(DType::F16, (1, 32000), false)?;
+    arena.reset();
+    arena.print_stat();
     Ok(())
 }

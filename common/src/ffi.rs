@@ -7,7 +7,7 @@ pub struct CShapeView {
     pub ndim: c_int,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[repr(C)]
 pub struct CTensorView {
     pub ptr: *mut c_void,

@@ -59,6 +59,7 @@ struct CTensorView {
 };
 
 cudaDeviceProp *getCudaDeviceProp();
+void *get_temp_buffer(size_t n);
 
 size_t element_size(ScalarType type);
 bool is_tensor_contiguous(const CTensorView *t);
@@ -69,6 +70,8 @@ size_t get_tensor_element_count(const CTensorView *tensor);
 
 void cuda_sort_tensor(CTensorView input, uint32_t dim, bool ascend, cudaStream_t stream, CTensorView output,
                       CTensorView indices);
+void cuda_argsort_tensor(CTensorView input, bool ascend, CTensorView indices, cudaStream_t stream);
+void cuda_dim_gather_tensor(CTensorView input, int dim, CTensorView index, cudaStream_t stream, CTensorView output);
 
 void cuda_cumsum_tensor(CTensorView input, uint32_t dim, cudaStream_t stream, CTensorView output);
 
@@ -91,6 +94,11 @@ void cuda_softmax_tensor(CTensorView input, int algorithm, cudaStream_t stream, 
 
 void cuda_oneflow_rms_norm(CTensorView x, CTensorView weight, CShapeView normalized_shape, float epsilon,
                            cudaStream_t stream, CTensorView inv_rms, CTensorView y);
+
+void cuda_arrange_int_tensor(int64_t start, int64_t delta, const int64_t arange_elem_cnt, CTensorView out,
+                             cudaStream_t stream);
+void cuda_arrange_float_tensor(double start, double delta, const int64_t arange_elem_cnt, CTensorView out,
+                               cudaStream_t stream);
 
 void fastertransformer_silu_activation(CTensorView a, CTensorView b, int num_token, int inter_size,
                                        cudaStream_t stream);

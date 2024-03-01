@@ -34,32 +34,28 @@
 namespace tensorrt_llm {
 namespace gemm {
 
-void Gemm::configGemm(CublasDataType dtype, bool transA, bool transB,
-                      CShapeView min_input, CShapeView max_input,
+void Gemm::configGemm(CublasDataType dtype, bool transA, bool transB, CShapeView min_input, CShapeView max_input,
                       CShapeView weight) {
   const int nbDimsA = min_input.ndim;
   const int nbDimsB = weight.ndim;
 
-  const auto minM = CublasLtGemmPluginProfiler::computeMDimension(
-      transA, nbDimsA, min_input.shape);
-  const auto maxM = CublasLtGemmPluginProfiler::computeMDimension(
-      transA, nbDimsA, max_input.shape);
-  const auto N = CublasLtGemmPluginProfiler::computeNDimension(transB, nbDimsB,
-                                                               weight.shape);
+  const auto minM = CublasLtGemmPluginProfiler::computeMDimension(transA, nbDimsA, min_input.shape);
+  const auto maxM = CublasLtGemmPluginProfiler::computeMDimension(transA, nbDimsA, max_input.shape);
+  const auto N = CublasLtGemmPluginProfiler::computeNDimension(transB, nbDimsB, weight.shape);
   const auto K = transA ? max_input.shape[0] : max_input.shape[nbDimsA - 1];
+  // printf("### minM:%d, maxM:%d, N:%d, K:%d\n", minM, maxM, N, K);
   GemmDims mDims = GemmDims{minM, maxM, N, static_cast<int32_t>(K)};
   GemmIdCublas mGemmId = GemmIdCublas(mDims.n, mDims.k, dtype, transA, transB);
+  profiler->setTranspose(transA, transB);
+  profiler->setOutputType(dtype);
   profiler->profileTactics(cublas, dtype, mDims, mGemmId);
 }
-int Gemm::gemm(int transA, int transB, CTensorView input, CTensorView weight,
-               CTensorView output) {
+int Gemm::gemm(int transA, int transB, CTensorView input, CTensorView weight, CTensorView output) {
   //
   const int nbDimsA = input.ndim;
   const int nbDimsB = weight.ndim;
-  const auto M = CublasLtGemmPluginProfiler::computeMDimension(transA, nbDimsA,
-                                                               input.shape);
-  const auto N = CublasLtGemmPluginProfiler::computeNDimension(transB, nbDimsB,
-                                                               weight.shape);
+  const auto M = CublasLtGemmPluginProfiler::computeMDimension(transA, nbDimsA, input.shape);
+  const auto N = CublasLtGemmPluginProfiler::computeNDimension(transB, nbDimsB, weight.shape);
   const int K = transA ? input.shape[0] : input.shape[nbDimsA - 1];
 
   GemmIdCublas mGemmId{};
@@ -76,10 +72,9 @@ int Gemm::gemm(int transA, int transB, CTensorView input, CTensorView weight,
 
   auto bestTactic = profiler->getBestConfig(M, mGemmId);
   int rc = bestTactic ? 0 : -1;
-  CublasLtGemmPluginProfiler::runGemm(
-      M, N, K, transA, transB, cublas, input.ptr, weight.ptr, output.ptr,
-      bestTactic, workspace, cublas->getStream());
+  CublasLtGemmPluginProfiler::runGemm(M, N, K, transA, transB, cublas, input.ptr, weight.ptr, output.ptr, bestTactic,
+                                      workspace, cublas->getStream());
   return rc;
 }
-} // namespace gemm
-} // namespace tensorrt_llm
+}  // namespace gemm
+}  // namespace tensorrt_llm

@@ -1,10 +1,12 @@
 use anyhow::{anyhow, Result};
-use metrics::atomics::AtomicU64;
+use metrics::{counter, histogram};
+use std::sync::atomic::AtomicU64;
 use std::{
     collections::{HashMap, HashSet},
     str::FromStr,
     sync::{Arc, Mutex},
     thread::JoinHandle,
+    time::Instant,
 };
 use tokio::sync::mpsc::{self, error::TryRecvError};
 use tokio::sync::oneshot;
@@ -51,7 +53,7 @@ struct LLMTask {
     prompt: LLMPrompt,
     sampling_params: SamplingParams,
     prompt_token_ids: Option<Encoding>,
-    arrival_time: std::time::Duration,
+    arrival_time: std::time::Instant,
     responder: LLMTaskResponder,
 }
 
@@ -143,7 +145,7 @@ impl LLMEngine {
         prompt: &str,
         sampling_params: SamplingParams,
         prompt_token_ids: Option<Encoding>,
-        arrival_time: std::time::Duration,
+        arrival_time: std::time::Instant,
     ) -> Result<()> {
         let prompt_token_ids = if let Some(prompt_token_ids) = prompt_token_ids {
             prompt_token_ids
@@ -173,11 +175,6 @@ impl LLMEngine {
     }
 
     pub fn abort_request(&mut self, request_ids: HashSet<u64>) {
-        // """Aborts a request(s) with the given ID.
-
-        // Args:
-        //     request_id: The ID(s) of the request to abort.
-        // """
         self.scheduler.abort_seq_group(request_ids);
     }
 
@@ -207,21 +204,14 @@ impl LLMEngine {
         seq_mut.read_offset = read_offset;
         seq_mut.output_text.push_str(new_output_text.as_str());
         // seq_mut.latest_output_token = new_output_text.clone();
-        // tracing::info!(
-        //     "{},full_txt:{:?}, new_output_text:{},prefix_offset:{}, read_offset:{},output_text:{}",
-        //     &seq_mut.get_token_ids().len(),
-        //     full_txt,
-        //     new_output_text,
-        //     prefix_offset,
-        //     read_offset,
-        //     seq_mut.output_text
-        // );
+
         if !full_txt.is_empty() {
             seq_mut.gen_texts.push(full_txt);
         }
         if !new_output_text.is_empty() {
             seq_mut.gen_texts.push(new_output_text);
         };
+
         Ok(())
     }
     fn check_stop(&self, seq_mut: &mut Sequence, sampling_params: &SamplingParams) -> bool {
@@ -595,7 +585,7 @@ impl LLMEngine {
         prompt: &LLMPrompt,
         sampling_params: SamplingParams,
         prompt_token_ids: Option<Encoding>,
-        arrival_time: std::time::Duration,
+        arrival_time: std::time::Instant,
     ) -> Result<()> {
         let prompt = self.get_prompt(prompt)?;
         // println!("##prompt:{}", prompt);
@@ -743,11 +733,12 @@ impl AsyncLLMEngine {
         cache_config: CacheConfig,
         parallel_config: ParallelConfig,
         scheduler_config: SchedulerConfig,
+        profiler_enable: bool,
     ) -> Self {
         let (notify_sender, notify_rx) = oneshot::channel::<()>();
         let (s, receiver) = mpsc::unbounded_channel();
         let model = String::from(model_config.dir());
-        let h: JoinHandle<()> = std::thread::spawn(|| {
+        let h: JoinHandle<()> = std::thread::spawn(move || {
             match LLMEngine::from(
                 model_config,
                 cache_config,
@@ -755,8 +746,14 @@ impl AsyncLLMEngine {
                 scheduler_config,
             ) {
                 Ok(engine) => {
+                    if profiler_enable {
+                        common::cuda_ext::cuda_profiler_start();
+                    }
                     if let Err(e) = run_engine(engine, notify_sender, receiver) {
                         tracing::error!("run_engine error:{}", e);
+                    }
+                    if profiler_enable {
+                        common::cuda_ext::cuda_profiler_stop();
                     }
                 }
                 Err(e) => {
@@ -795,9 +792,7 @@ impl AsyncLLMEngine {
                 LLMTaskResponder::Normal(s),
             )
         };
-        let arrival_time = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap();
+        let arrival_time = std::time::Instant::now();
         let task = LLMTask {
             prompt,
             sampling_params,

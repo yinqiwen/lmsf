@@ -10,6 +10,7 @@ use candle_core::{
 };
 
 use common::cuda_ext::get_tensor_cuda_device_ptr;
+use common::{DefaultTensorCreator, TensorCreator};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum CmpOp {
@@ -91,8 +92,18 @@ fn cuda_cmp<T: TensorOrScalar>(
     Ok(())
 }
 
-pub fn cuda_gt<T: TensorOrScalar>(lhs: &Tensor, rhs: T, dst: &Tensor) -> candle_core::Result<()> {
-    cuda_cmp(lhs, rhs, CmpOp::Gt, dst)
+// pub fn cuda_gt<T: TensorOrScalar>(lhs: &Tensor, rhs: T, dst: &Tensor) -> candle_core::Result<()> {
+//     cuda_cmp(lhs, rhs, CmpOp::Gt, dst)
+// }
+
+pub fn cuda_gt_<T: TensorOrScalar, F: TensorCreator>(
+    lhs: &Tensor,
+    rhs: T,
+    tensor_creator: &mut F,
+) -> candle_core::Result<Tensor> {
+    let dst = tensor_creator.new(lhs.shape(), DType::U8, lhs.device(), false)?;
+    cuda_cmp(lhs, rhs, CmpOp::Gt, &dst)?;
+    Ok(dst)
 }
 
 #[test]

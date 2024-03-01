@@ -10,6 +10,7 @@ candle-core = { workspace = true }
 candle-nn = { workspace = true }
 half = { workspace = true }
 common = { path = "../common", package = "lmsf-common" }
+candle-patch = { path = "../candle-patch" }
 
 [build-dependencies]
 anyhow = { version = "1", features = ["backtrace"] }
@@ -17,6 +18,7 @@ glob = "0.3.1"
 rayon = "1.7.0"
 cmake = "0.1"
 num_cpus = "1.15.0"
+bindgen_cuda = "0.1"
 
 [features]
 default = ["cuda"]

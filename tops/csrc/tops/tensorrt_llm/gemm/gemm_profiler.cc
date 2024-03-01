@@ -206,6 +206,7 @@ void GemmPluginProfiler<Config, RunnerPtr, GemmIdType, GemmIdHashType>::deserial
   for (int ii = 0; ii < selectedMapSize; ++ii) {
     std::pair<int, std::optional<Config>> config;
     read(data, config);
+    // printf("###workspaceSize: %d, state:%d\n", config.second->workspaceSize, config.second->state);
     profileMap->insert(config);
   }
 }
@@ -351,7 +352,7 @@ std::optional<Config> GemmPluginProfiler<Config, RunnerPtr, GemmIdType, GemmIdHa
     TLLM_LOG_WARNING(msg.str());
     return std::nullopt;
   }
-  printf("Fastest time:%fms for m:%d, n:%d, k:%d\n", bestTime, m, n, k);
+  printf("Fastest time:%fms for m:%d, n:%d, k:%d, workspace size:%d\n", bestTime, m, n, k, bestConfig.workspaceSize);
   return {bestConfig};
 }
 
@@ -521,6 +522,8 @@ std::vector<CublasLtGemmPluginProfiler::Config> CublasLtGemmPluginProfiler::getT
   cublasOperation_t transa, transb;
   int m, n, k;
   int lda, ldb, ldc;
+
+  // printf("mTransA:%d, mTransB:%d\n", mTransA, mTransB);
   getProblemParams(transa, transb, m, n, k, lda, ldb, ldc, mTransA, mTransB, M, N, K);
 
   mRunner->createDescriptors(transa, transb, m, n, k, lda, ldb, ldc);

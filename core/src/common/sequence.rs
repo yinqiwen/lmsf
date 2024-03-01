@@ -3,7 +3,7 @@ use num::{FromPrimitive, ToPrimitive};
 use std::cell::{Ref, RefCell};
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use std::{collections::HashMap, sync::atomic::AtomicU32};
 
 use anyhow::anyhow;
@@ -260,7 +260,7 @@ pub struct SequenceGroup {
     pub(crate) request_id: u64,
     seqs: HashMap<u64, SequenceRef>,
     pub(crate) sampling_params: SamplingParams,
-    pub(crate) arrival_time: Duration,
+    pub(crate) arrival_time: Instant,
     pub(crate) prompt_logprobs: Option<Arc<PromptLogprobs>>,
 }
 
@@ -274,7 +274,7 @@ impl SequenceGroup {
         request_id: u64,
         seqs: Vec<Sequence>,
         sampling_params: SamplingParams,
-        arrival_time: Duration,
+        arrival_time: Instant,
     ) -> Self {
         let mut seq_map: HashMap<_, _> = HashMap::new();
         for seq in seqs {
