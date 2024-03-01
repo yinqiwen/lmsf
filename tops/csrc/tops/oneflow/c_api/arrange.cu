@@ -42,7 +42,12 @@ void cuda_arrange_float_tensor(double start, double delta, const int64_t arange_
            reinterpret_cast<half*>(out.ptr));
       break;
     }
-
+    case ScalarType::DATA_F32: {
+      oneflow::user_op::ArangeFunctor<float> func;
+      func(stream, static_cast<float>(start), static_cast<float>(delta), arange_elem_cnt,
+           reinterpret_cast<float*>(out.ptr));
+      break;
+    }
     case ScalarType::DATA_F64: {
       oneflow::user_op::ArangeFunctor<double> func;
       func(stream, start, delta, arange_elem_cnt, reinterpret_cast<double*>(out.ptr));

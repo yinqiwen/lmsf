@@ -61,20 +61,21 @@ fn apply_penalties(
         get_bin_counts_and_mask(cache, output_tokens_tensor, vocab_size, num_seqs)?;
 
     let repetition_penalties = repetition_penalties.unsqueeze(D::Minus1)?;
-
+    // tracing::info!("Cost before cuda_repeat_ {:?}", start.elapsed());
     let repetition_penalties = tops::cuda_repeat_(
         &repetition_penalties,
         (1, vocab_size),
         cache,
         std::ptr::null_mut(),
     )?;
-
+    // tracing::info!("Cost after cuda_repeat_ {:?}", start.elapsed());
     // py: repetition_penalties[~(prompt_mask | output_mask)] = 1.0
     let repetition_penalties_cond = prompt_mask.where_cond(&prompt_mask, &output_mask)?;
     let repetition_penalties_tmp = Tensor::ones_like(&repetition_penalties)?;
     let repetition_penalties =
         repetition_penalties_cond.where_cond(&repetition_penalties, &repetition_penalties_tmp)?;
 
+    // tracing::info!("Cost after where_cond1 {:?}", start.elapsed());
     //py: logits = torch.where(logits > 0, logits / repetition_penalties,logits * repetition_penalties)
     //let cond = logits.gt(0_i64)?;
     let cond = cuda_gt_(&logits, 0_i64, cache)?;
@@ -84,6 +85,7 @@ fn apply_penalties(
     let false_logits =
         tops::cuda_tensor_mul_(&logits, &&repetition_penalties, logits.dtype(), cache)?;
     let logits = cond.where_cond(&true_logits, &false_logits)?;
+    // tracing::info!("Cost after where_cond2 {:?}", start.elapsed());
 
     // logits -= frequency_penalties.unsqueeze_(dim=1) * output_bin_counts
     let frequency_penalties = frequency_penalties.unsqueeze(1)?;
@@ -188,7 +190,8 @@ fn apply_top_p_top_k(
 
     // mask = (top_p_mask | top_k_mask)
     let mask = top_p_mask.where_cond(&top_p_mask, &top_k_mask)?;
-    let logits_sort = masked_fill_neg_inf(&logits_sort, &mask)?;
+    // let logits_sort = masked_fill_neg_inf(&logits_sort, &mask)?;
+    tops::cuda_masked_fill_neg_inf_(&logits_sort, &mask)?;
 
     // tracing::info!("After where elapsed:{:?}", start.elapsed());
     let src = tops::cuda_arange_(
@@ -215,7 +218,7 @@ fn apply_top_p_top_k(
     )?;
     // tracing::info!("After cuda_scatter elapsed:{:?}", start.elapsed());
     let logits = logits_sort.gather(&logits_idx_inv, D::Minus1)?;
-
+    // tracing::info!("After gather elapsed:{:?}", start.elapsed());
     Ok(logits)
 }
 
@@ -788,12 +791,12 @@ impl Sampler {
         // self.cache.reset();
         self.arena.reset();
         // self.arena.print_stat();
-        let cuda_dev = match logits.device() {
-            Device::Cuda(cuda) => cuda.clone(),
-            _ => {
-                candle_core::bail!("")
-            }
-        };
+        // let cuda_dev = match logits.device() {
+        //     Device::Cuda(cuda) => cuda.clone(),
+        //     _ => {
+        //         candle_core::bail!("")
+        //     }
+        // };
         // cuda_dev.synchronize();
 
         let (_, vocab_size) = logits.shape().dims2()?;

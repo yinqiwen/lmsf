@@ -100,6 +100,13 @@ void cuda_arrange_int_tensor(int64_t start, int64_t delta, const int64_t arange_
 void cuda_arrange_float_tensor(double start, double delta, const int64_t arange_elem_cnt, CTensorView out,
                                cudaStream_t stream);
 
+void cuda_masked_fill_float_(CTensorView input, CTensorView mask, double scalar_operand, cudaStream_t stream);
+void cuda_masked_fill_float(CTensorView input, CTensorView mask, double scalar_operand, cudaStream_t stream,
+                            CTensorView out);
+void cuda_masked_fill_int_(CTensorView input, CTensorView mask, int64_t scalar_operand, cudaStream_t stream);
+void cuda_masked_fill_int(CTensorView input, CTensorView mask, int64_t scalar_operand, cudaStream_t stream,
+                          CTensorView out);
+
 void fastertransformer_silu_activation(CTensorView a, CTensorView b, int num_token, int inter_size,
                                        cudaStream_t stream);
 

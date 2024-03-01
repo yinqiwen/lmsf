@@ -4,6 +4,7 @@ mod common;
 mod cublas;
 mod cumsum;
 mod exponential;
+mod masked_fill;
 mod random;
 mod repeat;
 mod rms_norm;
@@ -21,6 +22,7 @@ pub use binary::{
 pub use cublas::CublasWrapper;
 pub use cumsum::{cuda_cumsum, cuda_cumsum_};
 pub use exponential::cuda_tensor_exponential;
+pub use masked_fill::{cuda_masked_fill_, cuda_masked_fill_neg_inf_};
 pub use random::reset_random_seed;
 pub use repeat::{cuda_repeat, cuda_repeat_};
 pub use rms_norm::RmsNorm;
