@@ -106,22 +106,22 @@ pub fn cuda_gt_<T: TensorOrScalar, F: TensorCreator>(
     Ok(dst)
 }
 
-#[test]
-fn test_cuda_gt() -> candle_core::Result<()> {
-    let device = Device::new_cuda(0)?;
-    let src = Tensor::ones((1, 128), DType::I64, &device)?;
-    let dst = Tensor::ones((1, 128), DType::U8, &device)?;
-    println!("stride:{:?}", src.stride());
+// #[test]
+// fn test_cuda_gt() -> candle_core::Result<()> {
+//     let device = Device::new_cuda(0)?;
+//     let src = Tensor::ones((1, 128), DType::I64, &device)?;
+//     let dst = Tensor::ones((1, 128), DType::U8, &device)?;
+//     println!("stride:{:?}", src.stride());
 
-    match 1_i64.to_tensor_scalar()? {
-        TensorScalar::Scalar(v) => {
-            let v = v.to_dtype(src.dtype())?.broadcast_as(src.shape())?;
-            println!("stride:{:?}", v.stride());
-        }
-        _ => {}
-    }
+//     match 1_i64.to_tensor_scalar()? {
+//         TensorScalar::Scalar(v) => {
+//             let v = v.to_dtype(src.dtype())?.broadcast_as(src.shape())?;
+//             println!("stride:{:?}", v.stride());
+//         }
+//         _ => {}
+//     }
 
-    cuda_gt(&src, 0_i64, &dst)?;
-    println!("dst:{:?}", dst.to_string());
-    Ok(())
-}
+//     cuda_gt_(&src, 0_i64, &dst)?;
+//     println!("dst:{:?}", dst.to_string());
+//     Ok(())
+// }

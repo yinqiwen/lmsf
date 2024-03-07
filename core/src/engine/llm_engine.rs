@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Result};
-use metrics::{counter, histogram};
+use metrics::{counter, gauge, histogram};
 use std::sync::atomic::AtomicU64;
 use std::{
     collections::{HashMap, HashSet},
@@ -188,7 +188,12 @@ impl LLMEngine {
         self.scheduler.has_unfinished_seqs()
     }
 
-    fn decode_sequence(&self, seq_mut: &mut Sequence, prms: &SamplingParams) -> Result<()> {
+    fn decode_sequence(
+        &self,
+        seq_mut: &mut Sequence,
+        prms: &SamplingParams,
+        arrival_time: &Instant,
+    ) -> Result<()> {
         //self.tokenizer.decode(ids, skip_special_tokens);
         // let mut seq_mut = seq.borrow_mut();
         let mut opt = DecodeTokenOptions::default();
@@ -204,6 +209,11 @@ impl LLMEngine {
         seq_mut.read_offset = read_offset;
         seq_mut.output_text.push_str(new_output_text.as_str());
         // seq_mut.latest_output_token = new_output_text.clone();
+        if seq_mut.output_text.len() == 1 {
+            // histogram!("prompt.first_token_latnecy_ms")
+            //     .record(arrival_time.elapsed().as_millis() as f64);
+        } else {
+        }
 
         if !full_txt.is_empty() {
             seq_mut.gen_texts.push(full_txt);
@@ -364,7 +374,11 @@ impl LLMEngine {
         let mut seq_group_borrow = seq_group.borrow_mut();
         for (seq, _) in &mut child_seqs {
             let mut_seq = &mut seq.borrow_mut();
-            self.decode_sequence(mut_seq, &seq_group_borrow.sampling_params)?;
+            self.decode_sequence(
+                mut_seq,
+                &seq_group_borrow.sampling_params,
+                &seq_group_borrow.arrival_time,
+            )?;
             if self.check_stop(mut_seq, &seq_group_borrow.sampling_params) {
                 tracing::info!("seq stop:{:?}", mut_seq.get_state());
             }
@@ -779,6 +793,9 @@ impl AsyncLLMEngine {
         sampling_params: SamplingParams,
         stream: bool,
     ) -> Result<LLMTaskResponseReceiver> {
+        counter!("llm.prompt_recv").increment(1);
+        gauge!("llm.alive_prompt").increment(1.0);
+
         let (recv, responder) = if stream {
             let (s, r) = mpsc::channel::<RequestOutput>(16);
             (

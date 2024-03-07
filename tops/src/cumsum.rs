@@ -1,4 +1,5 @@
 use candle_core::cuda_backend::cudarc::driver::sys::CUstream;
+use candle_core::shape::Dim;
 use candle_core::{CpuStorage, CudaStorage, DType, Device, Layout, Shape, Tensor};
 use common::{
     ffi::get_scalar_type,
@@ -19,14 +20,15 @@ pub fn cuda_cumsum(t: &Tensor, dim: usize, stream: CUstream) -> candle_core::Res
     cuda_cumsum_(t, dim, &mut default_creator, stream)
 }
 
-pub fn cuda_cumsum_<F: TensorCreator>(
+pub fn cuda_cumsum_<F: TensorCreator, D: Dim>(
     t: &Tensor,
-    dim: usize,
+    dim: D,
     tensor_creator: &mut F,
     stream: CUstream,
 ) -> candle_core::Result<Tensor> {
     let out = tensor_creator.new(t.shape(), t.dtype(), t.device(), false)?;
     //let out = Tensor::zeros(t.shape(), t.dtype(), t.device())?;
+    let dim = dim.to_index(t.shape(), "cuda_cumsum_")?;
     let dim = get_column_major_dim(t.shape(), dim)?;
 
     let input_view = common::ffi::CTensorView::from(t, true)?;

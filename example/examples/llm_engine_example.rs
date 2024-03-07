@@ -1,4 +1,4 @@
-use std::{io::Write, ops::Sub};
+use std::{io::Write, ops::Sub, time::Duration};
 
 use clap::{Parser, ValueEnum};
 
@@ -17,7 +17,7 @@ async fn async_run(args: &EngineArgs) -> anyhow::Result<()> {
     sampling_params.max_tokens = 128;
 
     for i in 0..3 {
-        let prompt = "To be or not to be, ".to_string();
+        let prompt = "To be or not to be,".to_string();
         let prompt = LLMPrompt::from(prompt);
         let start = std::time::Instant::now();
         let receiver = runner.add(prompt, sampling_params.clone(), true)?;
@@ -148,6 +148,7 @@ async fn main() {
     let args = EngineArgs::parse();
 
     //tracing_subscriber::fmt::init();
+    common::MetricsBuilder::new().install();
     common::init_tracing(None, true);
 
     let current_dir = std::env::current_dir().unwrap();
@@ -158,4 +159,5 @@ async fn main() {
     if let Err(e) = async_run(&args).await {
         tracing::error!("{}", e);
     }
+    tokio::time::sleep(Duration::from_secs(70)).await;
 }

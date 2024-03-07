@@ -6,20 +6,24 @@ use std::{
 use candle_core::{DType, Device, IndexOp, Tensor, D};
 // use candle_ext::F;
 use clap::ArgAction;
+use common::TensorCreator;
 // use common::cuda_ext;
 
 use crate::{
     common::{
-        sampling_params::SamplingParams,
-        sampling_params::SamplingType,
+        sampling_params::{SamplingParams, SamplingType},
         sequence::{
             PromptLogprobs, SampleLogprobs, SamplerOutput, SequenceData, SequenceGroupOutput,
             SequenceOutput, SequenceRef,
         },
     },
-    model_executor::ops::tensor::masked_fill_neg_inf,
-    model_executor::sampling_metadata::{SamplingMetadata, SamplingTensors},
-    tensor::{cuda_div, cuda_gt_, cuda_scatter_add, cuda_sub_, cuda_tensor_ones, TensorArena},
+    model_executor::{
+        ops::tensor::masked_fill_neg_inf,
+        sampling_metadata::{SamplingMetadata, SamplingTensors},
+    },
+    tensor::{
+        cuda_assign, cuda_div, cuda_gt_, cuda_scatter_add, cuda_sub_, cuda_tensor_ones, TensorArena,
+    },
 };
 
 fn get_bin_counts_and_mask(
@@ -82,8 +86,9 @@ fn apply_penalties(
     //let true_logits = logits.div(&repetition_penalties)?;
     let true_logits = cuda_div(&logits, &repetition_penalties, cache)?;
     //let false_logits = logits.mul(&repetition_penalties)?;
+    // tracing::info!("Cost before where_cond2 {:?}", start.elapsed());
     let false_logits =
-        tops::cuda_tensor_mul_(&logits, &&repetition_penalties, logits.dtype(), cache)?;
+        tops::cuda_tensor_mul_(&logits, &repetition_penalties, logits.dtype(), cache)?;
     let logits = cond.where_cond(&true_logits, &false_logits)?;
     // tracing::info!("Cost after where_cond2 {:?}", start.elapsed());
 
@@ -137,6 +142,66 @@ fn apply_penalties(
     // cuda_sub_(&logits, &(presence_penalties.broadcast_mul(&output_mask)?))?;
 
     // tracing::info!("apply_penalties all cost {:?}", start.elapsed());
+    Ok(logits)
+}
+
+fn apply_top_k_top_p(
+    arena: &mut TensorArena,
+    logits: Tensor,
+    p: Tensor,
+    k: Tensor,
+) -> candle_core::Result<Tensor> {
+    let start = std::time::Instant::now();
+    let dim = logits.shape().dims().len() - 1;
+    let (logits_sort, logits_idx) =
+        tops::cuda_sort_(logits, dim, false, arena, std::ptr::null_mut())?;
+
+    // Apply top-k
+    let vocab_size = logits_sort.dims()[1];
+    let top_k_mask = Tensor::new(vocab_size as i64, k.device())?;
+    let top_k_mask = top_k_mask.broadcast_sub(&k.to_dtype(DType::I64)?)?;
+    // Get all the top_k values.
+    let top_k_mask = logits_sort.gather(&top_k_mask.unsqueeze(1)?, 1)?;
+    let top_k_mask = logits_sort.broadcast_lt(&top_k_mask)?;
+    tops::cuda_masked_fill_neg_inf_(&logits_sort, &top_k_mask)?;
+
+    // Apply top-p
+    let probs_sort = tops::cuda_softmax_(&logits_sort, D::Minus1, arena, std::ptr::null_mut())?;
+    let probs_sum = tops::cuda_cumsum_(&probs_sort, D::Minus1, arena, std::ptr::null_mut())?;
+    // top_p_mask = probs_sum <= 1 - p.unsqueeze(dim=1)
+    let p = p.unsqueeze(1)?;
+    let p = Tensor::ones(1, p.dtype(), p.device())?.broadcast_sub(&p)?;
+    let top_p_mask = probs_sum.broadcast_le(&p)?;
+
+    // at least one
+
+    // top_p_mask[:, -1] = False
+    let (_, top_p_mask_column_dim) = top_p_mask.dims2()?;
+    let top_p_mask_last_column =
+        top_p_mask.i((.., top_p_mask_column_dim - 1..top_p_mask_column_dim))?;
+    cuda_assign(&top_p_mask_last_column, 0_u8)?;
+
+    tops::cuda_masked_fill_neg_inf_(&logits_sort, &top_p_mask)?;
+
+    // Re-sort the probabilities.
+    let logits_idx_end = *(logits_idx.shape().dims().last().unwrap());
+    let src = tops::cuda_arange_(
+        0_u32,
+        logits_idx_end as u32,
+        logits_idx.device(),
+        arena,
+        std::ptr::null_mut(),
+    )?;
+    let src = src.expand(logits_idx.shape())?.contiguous()?;
+    let logits_idx_inv = arena.get(logits_idx.dtype(), logits_idx.shape(), false)?;
+    tops::cuda_scatter(
+        &logits_idx_inv,
+        &logits_idx,
+        &src,
+        D::Minus1,
+        std::ptr::null_mut(),
+    )?;
+    let logits = logits_sort.gather(&logits_idx_inv, D::Minus1)?;
     Ok(logits)
 }
 
@@ -835,8 +900,14 @@ impl Sampler {
         // cuda_dev.synchronize();
         // tracing::info!("sample 1.5 cost {:?}, {}", start.elapsed(), do_min_p);
         if do_top_p_top_k {
-            //apply_top_p_top_k();
-            logits = apply_top_p_top_k(
+            // logits = apply_top_p_top_k(
+            //     &mut self.arena,
+            //     logits,
+            //     sampling_tensors.top_ps,
+            //     sampling_tensors.top_ks,
+            // )?;
+
+            logits = apply_top_k_top_p(
                 &mut self.arena,
                 logits,
                 sampling_tensors.top_ps,
@@ -896,6 +967,7 @@ impl Sampler {
             prompt_logprobs,
             sample_logprobs,
         )?;
+
         // tracing::info!("sample forward cost {:?}", start.elapsed());
         Ok(Some(result))
     }

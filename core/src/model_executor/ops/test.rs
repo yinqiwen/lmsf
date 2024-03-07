@@ -7,6 +7,7 @@ use candle_core::{
     },
     CpuStorage, CudaDevice, DType, Device, IndexOp, Layout, Shape, Storage, Tensor, D,
 };
+use candle_ext::TensorExt;
 
 struct ArgSort;
 impl candle_core::CustomOp1 for ArgSort {
@@ -276,6 +277,38 @@ fn test_cuda_kernels_launc() -> candle_core::Result<()> {
     //     func.clone().launch(cfg, params).unwrap();
     // }
     // cuda_device.synchronize();
+    Ok(())
+}
+
+#[test]
+fn test_broadcast_sub() -> candle_core::Result<()> {
+    let device = candle_core::Device::new_cuda(0).unwrap();
+    let top_k_mask = Tensor::new(32000_i64, &device)?;
+    let k = Tensor::new(&[5_i64, 5], &device)?;
+    let top_k_mask = top_k_mask.broadcast_sub(&k)?;
+    println!("{}", top_k_mask.to_string());
+
+    let test = Tensor::rand(1_f32, 10.0, (2, 10), &device)?;
+    println!("{}", test.to_string());
+    let test2 = test.i((.., 9..10))?;
+    println!("{:?} {:?}", test2.shape(), test2.stride());
+    tops::unsafe_tensor_zero(&test2)?;
+    println!("{}", test.to_string());
+
+    // println!("{} {:?}", test.to_string(), test.stride());
+    // let src = Tensor::arange(0u32, 2, &device)?
+    //     .reshape((2, 1))?
+    //     .to_dtype(DType::F32)?;
+    // let test2 = test.slice_assign(&[0..2, 7..8], &src)?;
+    // println!("{} {:?}", test.to_string(), test.stride());
+    // println!("{} {:?}", test2.to_string(), test2.stride());
+    // // let last = test.i((.., 7))?;
+    // println!(
+    //     "{} {:?} {:?}",
+    //     last.to_string(),
+    //     last.shape(),
+    //     last.stride()
+    // );
     Ok(())
 }
 
