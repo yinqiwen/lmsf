@@ -26,9 +26,6 @@ pub use attn_bias::{
 };
 // pub use pos_encoding::PosEncoding;
 
-#[cfg(test)]
-mod test;
-
 fn get_tensor_cuda_slice_ptr_int(tensor: &Tensor) -> Result<i64> {
     let (storage, _) = tensor.storage_and_layout();
     let data = match storage.deref() {

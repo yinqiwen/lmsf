@@ -10,7 +10,7 @@ candle-core = { workspace = true }
 candle-nn = { workspace = true }
 half = { workspace = true }
 common = { path = "../common", package = "lmsf-common" }
-candle-patch = { path = "../candle-patch" }
+# candle-patch = { path = "../candle-patch" }
 
 [build-dependencies]
 anyhow = { version = "1", features = ["backtrace"] }

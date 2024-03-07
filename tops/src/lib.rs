@@ -1,5 +1,4 @@
 mod arange;
-mod binary;
 mod common;
 mod cublas;
 mod cumsum;
@@ -16,9 +15,9 @@ mod tensor_ext;
 mod topk;
 
 pub use arange::{cuda_arange, cuda_arange_};
-pub use binary::{
-    cuda_tensor_broadcast_mul, cuda_tensor_broadcast_mul_, cuda_tensor_mul, cuda_tensor_mul_,
-};
+// pub use binary::{
+//     cuda_tensor_broadcast_mul, cuda_tensor_broadcast_mul_, cuda_tensor_mul, cuda_tensor_mul_,
+// };
 pub use cublas::CublasWrapper;
 pub use cumsum::{cuda_cumsum, cuda_cumsum_};
 pub use exponential::cuda_tensor_exponential;

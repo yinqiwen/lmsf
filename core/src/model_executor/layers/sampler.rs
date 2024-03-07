@@ -22,7 +22,8 @@ use crate::{
         sampling_metadata::{SamplingMetadata, SamplingTensors},
     },
     tensor::{
-        cuda_assign, cuda_div, cuda_gt_, cuda_scatter_add, cuda_sub_, cuda_tensor_ones, TensorArena,
+        cuda_assign, cuda_div, cuda_gt_, cuda_scatter_add, cuda_sub_, cuda_tensor_broadcast_mul_,
+        cuda_tensor_mul_, cuda_tensor_ones, TensorArena,
     },
 };
 
@@ -87,8 +88,7 @@ fn apply_penalties(
     let true_logits = cuda_div(&logits, &repetition_penalties, cache)?;
     //let false_logits = logits.mul(&repetition_penalties)?;
     // tracing::info!("Cost before where_cond2 {:?}", start.elapsed());
-    let false_logits =
-        tops::cuda_tensor_mul_(&logits, &repetition_penalties, logits.dtype(), cache)?;
+    let false_logits = cuda_tensor_mul_(&logits, &repetition_penalties, logits.dtype(), cache)?;
     let logits = cond.where_cond(&true_logits, &false_logits)?;
     // tracing::info!("Cost after where_cond2 {:?}", start.elapsed());
 
@@ -107,7 +107,7 @@ fn apply_penalties(
 
     cuda_sub_(
         &logits,
-        &tops::cuda_tensor_broadcast_mul_(
+        &cuda_tensor_broadcast_mul_(
             &frequency_penalties,
             &output_bin_counts,
             logits.dtype(),
@@ -131,12 +131,7 @@ fn apply_penalties(
     // )?)?;
     cuda_sub_(
         &logits,
-        &tops::cuda_tensor_broadcast_mul_(
-            &presence_penalties,
-            &output_mask,
-            logits.dtype(),
-            cache,
-        )?,
+        &cuda_tensor_broadcast_mul_(&presence_penalties, &output_mask, logits.dtype(), cache)?,
     )?;
 
     // cuda_sub_(&logits, &(presence_penalties.broadcast_mul(&output_mask)?))?;

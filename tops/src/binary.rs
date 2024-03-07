@@ -7,8 +7,6 @@ use candle_core::{
 use candle_core::{Device, Tensor};
 use common::cuda_ext::get_tensor_cuda_device_ptr;
 
-use std::ops::Deref;
-
 use common::{DefaultTensorCreator, TensorCreator};
 
 fn kernel_name(root: &str, lhs_dtype: DType, rhs_dtype: DType) -> String {
