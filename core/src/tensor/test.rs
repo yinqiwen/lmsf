@@ -248,6 +248,15 @@ fn test_tesnor_reshape() {
 }
 
 #[test]
+fn test_sub1() -> candle_core::Result<()> {
+    let device = Device::new_cuda(0)?;
+    let p = Tensor::rand(0_f32, 1_f32, (256, 1), &device)?.to_dtype(DType::F16)?;
+    let p = Tensor::ones(1, DType::F16, &device)?.broadcast_sub(&p)?;
+    println!("{}", p.to_string());
+    Ok(())
+}
+
+#[test]
 fn test_cuda_kernels_launc() -> candle_core::Result<()> {
     let device = candle_core::Device::new_cuda(0).unwrap();
     let cuda_device = if let candle_core::Device::Cuda(cuda_dev) = &device {

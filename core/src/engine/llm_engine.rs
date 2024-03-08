@@ -116,10 +116,11 @@ impl LLMEngine {
         )?;
         let tokenizer_ids = TokenizerIds::from(tokenizer_config, &tokenizer)?;
         let mut worker = Worker::from(&cache_config, model_config.clone(), &parallel_config, 0)?;
+        tops::reset_random_seed(model_config.seed);
+        //worker.profile_run()?;
+        worker.init_cache()?;
 
         tops::reset_random_seed(model_config.seed);
-
-        worker.init_cache()?;
 
         let scheduler: Scheduler = Scheduler::new(
             &scheduler_config,
@@ -557,7 +558,8 @@ impl LLMEngine {
             for seq in seq_group.get_seqs(Some(SequenceState::Running)) {
                 let seq_borrow = seq.borrow();
                 let seq_id = seq_borrow.seq_id;
-                seq_data.insert(seq_id, seq.clone());
+                //seq_data.insert(seq_id, seq.clone());
+                seq_data.insert(seq_id, seq_borrow.data.clone());
                 let blocks = self.scheduler.get_block_table(seq_borrow.seq_id);
                 block_tables.insert(seq_id, blocks);
             }
@@ -573,7 +575,7 @@ impl LLMEngine {
         let modle_start = std::time::Instant::now();
         let output = self
             .worker
-            .execute_model(seq_group_metadata_list, &sched_result)?;
+            .execute_model(seq_group_metadata_list, &sched_result, true)?;
 
         // tracing::info!("model step exec cost {:?}", modle_start.elapsed());
         if let Some(output) = output {

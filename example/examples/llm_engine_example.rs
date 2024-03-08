@@ -10,11 +10,11 @@ async fn async_run(args: &EngineArgs) -> anyhow::Result<()> {
     let (model_cfg, cache_cfg, parallel_cfg, sched_cfg) = args.create_engine_configs()?;
     let runner = AsyncLLMEngine::new(model_cfg, cache_cfg, parallel_cfg, sched_cfg, true).await;
 
-    let mut sampling_params = SamplingParams::default();
-    sampling_params.temperature = 0.8;
-    sampling_params.top_k = 5;
-    sampling_params.presence_penalty = 0.2;
-    sampling_params.max_tokens = 128;
+    let sampling_params = SamplingParams::default()
+        .with_temperature(0.8)
+        .with_top_k(5)
+        .with_presence_penalty(0.2)
+        .with_max_tokens(128);
 
     for i in 0..3 {
         let prompt = "To be or not to be,".to_string();
@@ -60,11 +60,11 @@ fn run(args: &EngineArgs) -> anyhow::Result<()> {
 
     let mut engine = LLMEngine::from(model_cfg, cache_cfg, parallel_cfg, sched_cfg)?;
 
-    let mut sampling_params = SamplingParams::default();
-    sampling_params.temperature = 0.8;
-    sampling_params.top_k = 5;
-    sampling_params.presence_penalty = 0.2;
-    sampling_params.max_tokens = 128;
+    let sampling_params = SamplingParams::default()
+        .with_temperature(0.8)
+        .with_top_k(5)
+        .with_presence_penalty(0.2)
+        .with_max_tokens(128);
     let max_tokens = sampling_params.max_tokens;
 
     let arrival_time = std::time::Instant::now();

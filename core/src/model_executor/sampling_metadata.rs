@@ -3,13 +3,13 @@ use std::{collections::HashMap, sync::Arc};
 
 use crate::common::{
     sampling_params::{SamplingParams, SamplingType},
-    sequence::{Sequence, SequenceData, SequenceRef},
+    sequence::{Sequence, SequenceData, SequenceDataRef},
 };
 use common::TensorCreator;
 
 pub struct SamplingMetadata {
-    pub(crate) seq_groups: Vec<(Vec<u64>, SamplingParams)>,
-    pub(crate) seq_data: HashMap<u64, SequenceRef>,
+    pub(crate) seq_groups: Vec<(Vec<u64>, Arc<SamplingParams>)>,
+    pub(crate) seq_data: HashMap<u64, SequenceDataRef>,
     pub(crate) prompt_lens: Vec<usize>,
     pub(crate) selected_token_indices: Tensor,
     pub(crate) categorized_sample_indices: HashMap<SamplingType, Tensor>,
@@ -18,8 +18,8 @@ pub struct SamplingMetadata {
 }
 impl SamplingMetadata {
     pub fn new(
-        seq_groups: Vec<(Vec<u64>, SamplingParams)>,
-        seq_data: HashMap<u64, SequenceRef>,
+        seq_groups: Vec<(Vec<u64>, Arc<SamplingParams>)>,
+        seq_data: HashMap<u64, SequenceDataRef>,
         prompt_lens: &[usize],
         selected_token_indices: Tensor,
         categorized_sample_indices: HashMap<SamplingType, Tensor>,
@@ -52,34 +52,6 @@ pub struct SamplingTensors {
 }
 
 impl SamplingTensors {
-    // pub fn allocate_base_buffer(
-    //     max_batch: usize,
-    //     max_model_len: usize,
-    //     dtype: DType,
-    //     device: &Device,
-    // ) -> candle_core::Result<Self> {
-    //     let temperatures = Tensor::zeros(max_batch, dtype, device)?;
-    //     let top_ps = Tensor::zeros(max_batch, dtype, device)?;
-    //     let top_ks = Tensor::zeros(max_batch, DType::U32, device)?;
-    //     let min_ps = Tensor::zeros(max_batch, dtype, device)?;
-    //     let presence_penalties = Tensor::zeros(max_batch, dtype, device)?;
-    //     let frequency_penalties = Tensor::zeros(max_batch, dtype, device)?;
-    //     let repetition_penalties = Tensor::zeros(max_batch, dtype, device)?;
-    //     let prompt_tokens = Tensor::zeros(max_batch * max_model_len, DType::I64, device)?;
-    //     let output_tokens = Tensor::zeros(max_batch * max_model_len, DType::I64, device)?;
-    //     Ok(Self {
-    //         temperatures,
-    //         top_ps,
-    //         top_ks,
-    //         min_ps,
-    //         presence_penalties,
-    //         frequency_penalties,
-    //         repetition_penalties,
-    //         prompt_tokens,
-    //         output_tokens,
-    //     })
-    // }
-
     pub fn from_sampling_metadata<F: TensorCreator>(
         sampling_metadata: &SamplingMetadata,
         vocab_size: usize,

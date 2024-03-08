@@ -1,20 +1,19 @@
 use std::{
     collections::{BTreeMap, HashMap},
     ops::Mul,
+    sync::Arc,
 };
 
 use candle_core::{DType, Device, IndexOp, Tensor, D};
-// use candle_ext::F;
 use clap::ArgAction;
 use common::TensorCreator;
-// use common::cuda_ext;
 
 use crate::{
     common::{
         sampling_params::{SamplingParams, SamplingType},
         sequence::{
-            PromptLogprobs, SampleLogprobs, SamplerOutput, SequenceData, SequenceGroupOutput,
-            SequenceOutput, SequenceRef,
+            PromptLogprobs, SampleLogprobs, SamplerOutput, SequenceData, SequenceDataRef,
+            SequenceGroupOutput, SequenceOutput,
         },
     },
     model_executor::{
@@ -136,7 +135,7 @@ fn apply_penalties(
 
     // cuda_sub_(&logits, &(presence_penalties.broadcast_mul(&output_mask)?))?;
 
-    // tracing::info!("apply_penalties all cost {:?}", start.elapsed());
+    metrics::histogram!("apply_penalties").record(start.elapsed().as_secs_f64());
     Ok(logits)
 }
 
@@ -147,10 +146,16 @@ fn apply_top_k_top_p(
     k: Tensor,
 ) -> candle_core::Result<Tensor> {
     let start = std::time::Instant::now();
+    let cuda_dev = match logits.device() {
+        Device::Cuda(cuda) => cuda.clone(),
+        _ => {
+            candle_core::bail!("")
+        }
+    };
+    cuda_dev.synchronize();
     let dim = logits.shape().dims().len() - 1;
     let (logits_sort, logits_idx) =
         tops::cuda_sort_(logits, dim, false, arena, std::ptr::null_mut())?;
-
     // Apply top-k
     let vocab_size = logits_sort.dims()[1];
     let top_k_mask = Tensor::new(vocab_size as i64, k.device())?;
@@ -159,13 +164,15 @@ fn apply_top_k_top_p(
     let top_k_mask = logits_sort.gather(&top_k_mask.unsqueeze(1)?, 1)?;
     let top_k_mask = logits_sort.broadcast_lt(&top_k_mask)?;
     tops::cuda_masked_fill_neg_inf_(&logits_sort, &top_k_mask)?;
-
     // Apply top-p
     let probs_sort = tops::cuda_softmax_(&logits_sort, D::Minus1, arena, std::ptr::null_mut())?;
     let probs_sum = tops::cuda_cumsum_(&probs_sort, D::Minus1, arena, std::ptr::null_mut())?;
     // top_p_mask = probs_sum <= 1 - p.unsqueeze(dim=1)
+
     let p = p.unsqueeze(1)?;
+
     let p = Tensor::ones(1, p.dtype(), p.device())?.broadcast_sub(&p)?;
+
     let top_p_mask = probs_sum.broadcast_le(&p)?;
 
     // at least one
@@ -187,6 +194,7 @@ fn apply_top_k_top_p(
         arena,
         std::ptr::null_mut(),
     )?;
+
     let src = src.expand(logits_idx.shape())?.contiguous()?;
     let logits_idx_inv = arena.get(logits_idx.dtype(), logits_idx.shape(), false)?;
     tops::cuda_scatter(
@@ -197,6 +205,8 @@ fn apply_top_k_top_p(
         std::ptr::null_mut(),
     )?;
     let logits = logits_sort.gather(&logits_idx_inv, D::Minus1)?;
+
+    metrics::histogram!("apply_top_k_top_p").record(start.elapsed().as_secs_f64());
     Ok(logits)
 }
 
@@ -356,7 +366,7 @@ fn multinomial(mut probs: Tensor, num_samples: usize) -> candle_core::Result<Ten
 }
 
 fn greedy_sample(
-    selected_seq_groups: &Vec<&(Vec<u64>, SamplingParams)>,
+    selected_seq_groups: &Vec<&(Vec<u64>, Arc<SamplingParams>)>,
     samples: &Tensor,
 ) -> candle_core::Result<Vec<(Vec<u32>, Vec<u32>)>> {
     let samples = samples.to_vec2::<u32>()?;
@@ -379,7 +389,7 @@ fn greedy_sample(
 }
 
 fn random_sample(
-    selected_seq_groups: &Vec<&(Vec<u64>, SamplingParams)>,
+    selected_seq_groups: &Vec<&(Vec<u64>, Arc<SamplingParams>)>,
     is_prompts: &Vec<bool>,
     random_samples: &Tensor,
 ) -> candle_core::Result<Vec<(Vec<u32>, Vec<u32>)>> {
@@ -413,9 +423,9 @@ fn random_sample(
 }
 
 fn beam_search_sample(
-    selected_seq_groups: &Vec<&(Vec<u64>, SamplingParams)>,
+    selected_seq_groups: &Vec<&(Vec<u64>, Arc<SamplingParams>)>,
     is_prompts: &Vec<bool>,
-    seq_data: &HashMap<u64, SequenceRef>,
+    seq_data: &HashMap<u64, SequenceDataRef>,
     logprobs: &Tensor,
 ) -> candle_core::Result<Vec<(Vec<u32>, Vec<u32>)>> {
     let mut sample_idx: usize = 0;
@@ -601,6 +611,7 @@ fn sample(
     for (i, v) in sample_results_dict {
         result.push(v);
     }
+    metrics::histogram!("sample").record(start.elapsed().as_secs_f64());
     Ok(result)
 }
 
@@ -829,12 +840,6 @@ impl Sampler {
         dtype: DType,
         device: &Device,
     ) -> candle_core::Result<Self> {
-        // let base_tensor_buffer =
-        //     SamplingTensors::allocate_base_buffer(max_batch, max_model_len, dtype, device)?;
-        // let mut cache = TensorCache::new();
-        // cache.fill(DType::I64, 1024 * 32, device)?;
-        // cache.fill(DType::U8, 1024 * 32, device)?;
-        // cache.fill(DType::F16, 1024 * 32, device)?;
         Ok(Self {
             // base_tensor_buffer,
             // cache,
@@ -851,13 +856,13 @@ impl Sampler {
         // self.cache.reset();
         self.arena.reset();
         // self.arena.print_stat();
-        // let cuda_dev = match logits.device() {
-        //     Device::Cuda(cuda) => cuda.clone(),
-        //     _ => {
-        //         candle_core::bail!("")
-        //     }
-        // };
-        // cuda_dev.synchronize();
+        let cuda_dev = match logits.device() {
+            Device::Cuda(cuda) => cuda.clone(),
+            _ => {
+                candle_core::bail!("")
+            }
+        };
+        cuda_dev.synchronize();
 
         let (_, vocab_size) = logits.shape().dims2()?;
         if !sampling_metadata.perform_sampling {
@@ -964,6 +969,8 @@ impl Sampler {
         )?;
 
         // tracing::info!("sample forward cost {:?}", start.elapsed());
+        metrics::histogram!("sample_forward").record(start.elapsed().as_secs_f64());
+
         Ok(Some(result))
     }
 }

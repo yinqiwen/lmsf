@@ -42,6 +42,18 @@ pub struct SchedulerOutputs {
     pub(crate) ignored_seq_groups: Vec<SequenceGroupRef>,
 }
 impl SchedulerOutputs {
+    pub fn new(prompt: bool) -> Self {
+        Self {
+            scheduled_seq_groups: Vec::new(),
+            prompt_run: prompt,
+            num_batched_tokens: 0,
+            blocks_to_swap_in: HashMap::new(),
+            blocks_to_swap_out: HashMap::new(),
+            blocks_to_copy: HashMap::new(),
+            ignored_seq_groups: Vec::new(),
+        }
+    }
+
     pub fn is_empty(&self) -> bool {
         // # NOTE: We do not consider the ignored sequence groups.
         self.scheduled_seq_groups.is_empty()

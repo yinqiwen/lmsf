@@ -93,7 +93,15 @@ fn log_metrics(
         }
         for quantile in quantiles {
             if let Some(v) = sum.quantile(quantile.value()) {
-                metrics_info.push_str(format!("{}_{}:{}\n", key_str, quantile.label(), v).as_str());
+                metrics_info.push_str(
+                    format!(
+                        "{}_{}:{:?}\n",
+                        key_str,
+                        quantile.label(),
+                        Duration::from_secs_f64(v)
+                    )
+                    .as_str(),
+                );
             }
         }
     }
@@ -140,7 +148,7 @@ impl Default for MetricsBuilder {
 
 impl MetricsBuilder {
     pub fn new() -> Self {
-        let quantiles = parse_quantiles(&[0.0, 0.5, 0.8, 0.9, 0.95, 0.99, 0.999, 1.0]);
+        let quantiles = parse_quantiles(&[0.0, 0.8, 0.9, 0.99, 0.999, 1.0]);
         Self {
             quantiles,
             idle_timeout: Duration::from_secs(300),

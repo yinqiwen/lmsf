@@ -29,11 +29,13 @@ pub fn cuda_cumsum_<F: TensorCreator, D: Dim>(
     let out = tensor_creator.new(t.shape(), t.dtype(), t.device(), false)?;
     //let out = Tensor::zeros(t.shape(), t.dtype(), t.device())?;
     let dim = dim.to_index(t.shape(), "cuda_cumsum_")?;
-    let dim = get_column_major_dim(t.shape(), dim)?;
+    // let dim = get_column_major_dim(t.shape(), dim)?;
 
-    let input_view = common::ffi::CTensorView::from(t, true)?;
-    let output_view = common::ffi::CTensorView::from(&out, true)?;
+    // let input_view = CTensorView::from(t, true)?;
+    // let output_view = CTensorView::from(&out, true)?;
 
+    let input_view = CTensorView::from(t, false)?;
+    let output_view = CTensorView::from(&out, false)?;
     unsafe {
         cuda_cumsum_tensor(input_view, dim as u32, stream, output_view);
     };

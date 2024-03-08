@@ -18,6 +18,7 @@ pub trait ModelConfig: std::fmt::Debug + Send + Sync {
     fn get_sliding_window(&self) -> Option<usize> {
         None
     }
+    fn get_vocab_size(&self) -> usize;
 }
 
 pub trait TokenizerConfig: std::fmt::Debug + Send + Sync {

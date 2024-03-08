@@ -48,6 +48,7 @@ pub struct SequenceData {
     output_token_ids: Vec<u32>,
     cumulative_logprob: f32,
 }
+pub type SequenceDataRef = Rc<RefCell<SequenceData>>;
 
 impl SequenceData {
     pub fn new(prompt_token_ids: &[u32]) -> Self {
@@ -57,10 +58,17 @@ impl SequenceData {
             cumulative_logprob: 0.0,
         }
     }
+    pub fn new_ref(prompt_token_ids: &[u32]) -> SequenceDataRef {
+        Rc::new(RefCell::new(SequenceData::new(prompt_token_ids)))
+    }
 
     pub fn append_token_id(&mut self, token_id: u32, logprob: f32) {
         self.output_token_ids.push(token_id);
         self.cumulative_logprob += logprob;
+    }
+
+    pub fn get_cumulative_logprob(&self) -> f32 {
+        self.cumulative_logprob
     }
 
     pub fn get_len(&self) -> usize {
@@ -96,7 +104,7 @@ pub struct Sequence {
     pub(crate) seq_id: u64,
     prompt: String,
     block_size: usize,
-    data: SequenceData,
+    pub(crate) data: SequenceDataRef,
     pub(crate) prefix_offset: usize,
     pub(crate) read_offset: usize,
     pub(crate) gen_texts: Vec<String>,
@@ -118,7 +126,7 @@ impl Sequence {
             seq_id,
             prompt: String::from(prompt),
             block_size,
-            data: SequenceData::new(prompt_token_ids),
+            data: SequenceData::new_ref(prompt_token_ids),
             output_text: String::new(),
             // latest_output_token: String::new(),
             gen_texts: Vec::new(),
@@ -172,39 +180,39 @@ impl Sequence {
         self.append_tokens_to_blocks(&[token_id]);
         let logprob = *(logprobs.get(&token_id).unwrap());
         self.output_logprobs.push(logprobs);
-        self.data.append_token_id(token_id, logprob);
+        self.data.borrow_mut().append_token_id(token_id, logprob);
     }
 
     pub fn get_len(&self) -> usize {
-        self.data.get_len()
+        self.data.borrow().get_len()
     }
 
     pub fn get_prompt_len(&self) -> usize {
-        self.data.get_prompt_len()
+        self.data.borrow().get_prompt_len()
     }
 
     pub fn get_output_len(&self) -> usize {
-        self.data.get_output_len()
+        self.data.borrow().get_output_len()
     }
 
     pub fn get_token_ids(&self) -> Vec<u32> {
-        self.data.get_token_ids()
+        self.data.borrow().get_token_ids()
     }
 
     pub fn get_last_token_id(&self) -> u32 {
-        self.data.get_last_token_id()
+        self.data.borrow().get_last_token_id()
     }
 
-    pub fn get_output_token_ids(&self) -> &[u32] {
-        &self.data.output_token_ids
+    pub fn get_output_token_ids(&self) -> Vec<u32> {
+        self.data.borrow().output_token_ids.clone()
     }
 
     pub fn get_cumulative_logprob(&self) -> f32 {
-        self.data.cumulative_logprob
+        self.data.borrow().get_cumulative_logprob()
     }
 
-    pub fn get_prompt_token_ids(&self) -> &[u32] {
-        self.data.get_prompt_token_ids()
+    pub fn get_prompt_token_ids(&self) -> Vec<u32> {
+        self.data.borrow().prompt_token_ids.clone()
     }
 
     pub fn get_state(&self) -> SequenceState {
@@ -259,7 +267,7 @@ impl Sequence {
 pub struct SequenceGroup {
     pub(crate) request_id: u64,
     seqs: HashMap<u64, SequenceRef>,
-    pub(crate) sampling_params: SamplingParams,
+    pub(crate) sampling_params: Arc<SamplingParams>,
     pub(crate) arrival_time: Instant,
     pub(crate) prompt_logprobs: Option<Arc<PromptLogprobs>>,
 }
@@ -283,7 +291,7 @@ impl SequenceGroup {
         Self {
             request_id,
             seqs: seq_map,
-            sampling_params,
+            sampling_params: Arc::new(sampling_params),
             arrival_time,
             prompt_logprobs: None,
         }
@@ -307,6 +315,7 @@ impl SequenceGroup {
             .1
             .borrow()
             .data
+            .borrow()
             .prompt_token_ids
             .clone()
     }
@@ -416,8 +425,8 @@ impl SequenceGroup {
 pub struct SequenceGroupMetadata {
     request_id: u64,
     pub(crate) is_prompt: bool,
-    pub(crate) seq_data: HashMap<u64, SequenceRef>,
-    pub(crate) sampling_params: SamplingParams,
+    pub(crate) seq_data: HashMap<u64, SequenceDataRef>,
+    pub(crate) sampling_params: Arc<SamplingParams>,
     pub(crate) block_tables: HashMap<u64, Vec<u32>>,
 }
 
@@ -425,8 +434,8 @@ impl SequenceGroupMetadata {
     pub fn new(
         request_id: u64,
         is_prompt: bool,
-        seq_data: HashMap<u64, SequenceRef>,
-        sampling_params: SamplingParams,
+        seq_data: HashMap<u64, SequenceDataRef>,
+        sampling_params: Arc<SamplingParams>,
         block_tables: HashMap<u64, Vec<u32>>,
     ) -> Self {
         Self {

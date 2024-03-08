@@ -208,6 +208,10 @@ impl ModelConfig {
     pub fn get_sliding_window(&self) -> Option<usize> {
         self.cfg.get_sliding_window()
     }
+
+    pub fn get_vocab_size(&self) -> usize {
+        self.cfg.get_vocab_size()
+    }
 }
 
 #[derive(Debug, Clone)]

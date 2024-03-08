@@ -46,7 +46,7 @@ pub(crate) struct LlamaConfig {
     tie_word_embeddings: bool,
     torch_dtype: String,
     use_cache: bool,
-    vocab_size: u32,
+    vocab_size: usize,
 }
 
 impl ModelConfig for LlamaConfig {
@@ -71,5 +71,8 @@ impl ModelConfig for LlamaConfig {
     }
     fn num_hidden_layers(&self) -> usize {
         self.num_hidden_layers
+    }
+    fn get_vocab_size(&self) -> usize {
+        self.vocab_size
     }
 }

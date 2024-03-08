@@ -80,6 +80,79 @@ impl Default for SamplingParams {
 }
 
 impl SamplingParams {
+    pub fn new() -> Self {
+        SamplingParams::default()
+    }
+    pub fn with_n(mut self, n: usize) -> Self {
+        self.n = n;
+        self
+    }
+    pub fn with_best_of(mut self, best_of: usize) -> Self {
+        self.best_of = Some(best_of);
+        self
+    }
+    pub fn with_frequency_penalty(mut self, frequency_penalty: f32) -> Self {
+        self.frequency_penalty = frequency_penalty;
+        self
+    }
+    pub fn with_repetition_penalty(mut self, repetition_penalty: f32) -> Self {
+        self.repetition_penalty = repetition_penalty;
+        self
+    }
+
+    pub fn with_min_p(mut self, min_p: f32) -> Self {
+        self.min_p = min_p;
+        self
+    }
+
+    pub fn with_beam_search(mut self) -> Self {
+        self.use_beam_search = true;
+        self
+    }
+    pub fn with_length_penalty(mut self, length_penalty: f32) -> Self {
+        self.length_penalty = length_penalty;
+        self
+    }
+    pub fn with_ignore_eos(mut self) -> Self {
+        self.ignore_eos = true;
+        self
+    }
+    pub fn disable_skip_special_tokens(mut self) -> Self {
+        self.skip_special_tokens = false;
+        self
+    }
+    pub fn disable_spaces_between_special_tokens(mut self) -> Self {
+        self.spaces_between_special_tokens = false;
+        self
+    }
+    pub fn with_include_stop_str_in_output(mut self) -> Self {
+        self.include_stop_str_in_output = true;
+        self
+    }
+
+    pub fn with_top_p(mut self, top_p: f32) -> Self {
+        self.top_p = top_p;
+        self
+    }
+    pub fn with_top_k(mut self, top_k: usize) -> Self {
+        self.top_k = top_k as i32;
+        self
+    }
+
+    pub fn with_temperature(mut self, temperature: f32) -> Self {
+        self.temperature = temperature;
+        self
+    }
+    pub fn with_presence_penalty(mut self, presence_penalty: f32) -> Self {
+        self.presence_penalty = presence_penalty;
+        self
+    }
+
+    pub fn with_max_tokens(mut self, max_tokens: usize) -> Self {
+        self.max_tokens = max_tokens;
+        self
+    }
+
     pub fn sampling_type(&self) -> SamplingType {
         if self.use_beam_search {
             SamplingType::Beam
@@ -222,63 +295,5 @@ impl SamplingParams {
             }
         }
         Ok(())
-    }
-}
-
-pub struct SamplingParamsBuilder {
-    pub n: Option<usize>,
-    pub best_of: Option<usize>,
-    pub presence_penalty: Option<f32>,
-    pub frequency_penalty: Option<f32>,
-    pub repetition_penalty: Option<f32>,
-    pub temperature: Option<f32>,
-    pub top_p: Option<f32>,
-    pub top_k: Option<i32>,
-    pub min_p: Option<f32>,
-    pub use_beam_search: Option<bool>,
-    pub length_penalty: Option<f32>,
-    pub early_stopping: Option<EarlyStopType>,
-    pub stop: Option<Vec<String>>,
-    pub stop_token_ids: Option<Vec<u32>>,
-    pub include_stop_str_in_output: Option<bool>,
-    pub ignore_eos: Option<bool>,
-    pub max_tokens: Option<usize>,
-    pub logprobs: Option<u32>,
-    pub prompt_logprobs: Option<u32>,
-    pub skip_special_tokens: Option<bool>,
-    pub spaces_between_special_tokens: Option<bool>,
-}
-
-impl SamplingParamsBuilder {
-    pub fn new() -> Self {
-        Self {
-            n: None,
-            best_of: None,
-            presence_penalty: None,
-            frequency_penalty: None,
-            repetition_penalty: None,
-            temperature: None,
-            top_p: None,
-            top_k: None,
-            min_p: None,
-            use_beam_search: None,
-            length_penalty: None,
-            early_stopping: None,
-            stop: None,
-            stop_token_ids: None,
-            include_stop_str_in_output: None,
-            ignore_eos: None,
-            max_tokens: None,
-            logprobs: None,
-            prompt_logprobs: None,
-            skip_special_tokens: None,
-            spaces_between_special_tokens: None,
-        }
-    }
-
-    pub fn build() -> anyhow::Result<SamplingParams> {
-        let params = SamplingParams::default();
-
-        Ok(params)
     }
 }
