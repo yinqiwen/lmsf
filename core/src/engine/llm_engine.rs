@@ -346,7 +346,7 @@ impl LLMEngine {
             let mut parent_borrow = parent.borrow_mut();
             if let Some(child_samples) = parent_child_dict.get(&parent_borrow.seq_id) {
                 if child_samples.is_empty() {
-                    parent.borrow().update_state(SequenceState::FinishedAborted);
+                    parent_borrow.update_state(SequenceState::FinishedAborted);
                     seq_group.borrow_mut().remove(parent_borrow.seq_id);
                     self.scheduler.free_seq(parent_borrow.seq_id);
                     continue;
@@ -357,7 +357,7 @@ impl LLMEngine {
                     let new_child_seq_id = self
                         .seq_counter
                         .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-                    let mut child: Sequence = parent.borrow().fork(new_child_seq_id);
+                    let mut child: Sequence = parent_borrow.fork(new_child_seq_id);
                     child.append_token_id(child_sample.output_token, child_sample.logprobs.clone());
                     //child_seqs.push((child.newRef(), parent.clone()));
                     child_seqs.push((child.new_ref(), parent.clone()))
@@ -373,6 +373,7 @@ impl LLMEngine {
         }
 
         let mut seq_group_borrow = seq_group.borrow_mut();
+
         for (seq, _) in &mut child_seqs {
             let mut_seq = &mut seq.borrow_mut();
             self.decode_sequence(
@@ -425,7 +426,7 @@ impl LLMEngine {
             let y_score =
                 y.0.borrow()
                     .get_beam_search_score(length_penalty, None, Some(eos_token_id));
-            x_score.total_cmp(&y_score)
+            x_score.total_cmp(&y_score).reverse()
         });
 
         for (seq, parent, is_new) in &all_finished_seqs[..beam_width] {
@@ -453,7 +454,7 @@ impl LLMEngine {
             let y_score =
                 y.0.borrow()
                     .get_beam_search_score(length_penalty, None, Some(eos_token_id));
-            x_score.total_cmp(&y_score)
+            x_score.total_cmp(&y_score).reverse()
         });
         let mut stop_beam_search = false;
         if running_child_seqs.is_empty() {
@@ -461,11 +462,6 @@ impl LLMEngine {
         } else if all_finished_seqs.len() < beam_width {
             stop_beam_search = false;
         } else {
-            // best_running_seq = running_child_seqs[0][0]
-            // current_worst_seq = all_finished_seqs[beam_width - 1][0]
-            // stop_beam_search = self._check_beam_search_early_stopping(
-            //     seq_group.sampling_params.early_stopping,
-            //     seq_group.sampling_params, best_running_seq, current_worst_seq)
             let best_running_seq = running_child_seqs[0].0.clone();
             let current_worst_seq = all_finished_seqs[beam_width - 1].0.clone();
             stop_beam_search = self.check_beam_search_early_stopping(
@@ -495,7 +491,7 @@ impl LLMEngine {
 
         for (seq, parent) in selected_child_seqs {
             if let Some(parent) = parent {
-                if std::rc::Rc::ptr_eq(&seq, &parent) {
+                if std::rc::Rc::ptr_eq(&seq, &parent) && seq.borrow().is_finished() {
                     self.scheduler.free_seq(seq.borrow().seq_id);
                 }
             }
@@ -510,6 +506,7 @@ impl LLMEngine {
                 }
             }
         }
+
         Ok(())
     }
 
@@ -550,6 +547,7 @@ impl LLMEngine {
             }
             return Ok(outputs);
         }
+
         let mut seq_group_metadata_list: Vec<SequenceGroupMetadata> = Vec::new();
         for seq_group in &sched_result.scheduled_seq_groups {
             let mut seq_data = HashMap::new();

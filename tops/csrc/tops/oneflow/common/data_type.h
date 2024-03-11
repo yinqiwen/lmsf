@@ -28,6 +28,7 @@ limitations under the License.
 #include <cuda_bf16.h>
 #endif  // CUDA_VERSION >= 11000
 #endif
+#include "tops/oneflow/common/preprocessor.h"
 // #include "oneflow/core/common/bfloat16.h"
 // #include "oneflow/core/common/bfloat16_math.h"
 // #include "oneflow/core/common/data_type.pb.h"
@@ -89,7 +90,7 @@ using float16 = half;
 
 // DEFINE_SPEC(detail::IsFloat16Helper, float16, true)
 // #ifdef WITH_CUDA
-// DEFINE_SPEC(detail::IsFloat16Helper, half, true)
+DEFINE_SPEC(detail::IsFloat16Helper, half, true)
 // #endif  // WITH_CUDA
 
 template <typename T>
@@ -238,35 +239,35 @@ OF_DEVICE_FUNC T GetMaxVal();
 #define APPLE_MIN_VAL_SEQ
 #endif
 
-// #define MIN_VAL_SEQ                        \
-//   OF_PP_MAKE_TUPLE_SEQ(int8_t, INT8_MIN)   \
-//   OF_PP_MAKE_TUPLE_SEQ(int16_t, INT16_MIN) \
-//   OF_PP_MAKE_TUPLE_SEQ(int32_t, INT32_MIN) \
-//   OF_PP_MAKE_TUPLE_SEQ(int64_t, INT64_MIN) \
-//   OF_PP_MAKE_TUPLE_SEQ(uint8_t, 0)         \
-//   OF_PP_MAKE_TUPLE_SEQ(uint16_t, 0)        \
-//   OF_PP_MAKE_TUPLE_SEQ(uint32_t, 0)        \
-//   APPLE_MIN_VAL_SEQ                        \
-//   OF_PP_MAKE_TUPLE_SEQ(uint64_t, 0)        \
-//   OF_PP_MAKE_TUPLE_SEQ(float, -FLT_MAX)    \
-//   OF_PP_MAKE_TUPLE_SEQ(double, -DBL_MAX)   \
-//   OF_PP_MAKE_TUPLE_SEQ(bool, false)
+#define MIN_VAL_SEQ                        \
+  OF_PP_MAKE_TUPLE_SEQ(int8_t, INT8_MIN)   \
+  OF_PP_MAKE_TUPLE_SEQ(int16_t, INT16_MIN) \
+  OF_PP_MAKE_TUPLE_SEQ(int32_t, INT32_MIN) \
+  OF_PP_MAKE_TUPLE_SEQ(int64_t, INT64_MIN) \
+  OF_PP_MAKE_TUPLE_SEQ(uint8_t, 0)         \
+  OF_PP_MAKE_TUPLE_SEQ(uint16_t, 0)        \
+  OF_PP_MAKE_TUPLE_SEQ(uint32_t, 0)        \
+  APPLE_MIN_VAL_SEQ                        \
+  OF_PP_MAKE_TUPLE_SEQ(uint64_t, 0)        \
+  OF_PP_MAKE_TUPLE_SEQ(float, -FLT_MAX)    \
+  OF_PP_MAKE_TUPLE_SEQ(double, -DBL_MAX)   \
+  OF_PP_MAKE_TUPLE_SEQ(bool, false)
 
-// #define SPECIALIZE_MAX_VAL(T, limit_value) \
-//   template <>                              \
-//   OF_DEVICE_FUNC T GetMaxVal<T>() {        \
-//     return limit_value;                    \
-//   }
-// OF_PP_FOR_EACH_TUPLE(SPECIALIZE_MAX_VAL, MAX_VAL_SEQ);
-// #undef SPECIALIZE_MAX_VAL
+#define SPECIALIZE_MAX_VAL(T, limit_value) \
+  template <>                              \
+  OF_DEVICE_FUNC T GetMaxVal<T>() {        \
+    return limit_value;                    \
+  }
+OF_PP_FOR_EACH_TUPLE(SPECIALIZE_MAX_VAL, MAX_VAL_SEQ);
+#undef SPECIALIZE_MAX_VAL
 
-// #define SPECIALIZE_MIN_VAL(T, limit_value) \
-//   template <>                              \
-//   OF_DEVICE_FUNC T GetMinVal<T>() {        \
-//     return limit_value;                    \
-//   }
-// OF_PP_FOR_EACH_TUPLE(SPECIALIZE_MIN_VAL, MIN_VAL_SEQ);
-// #undef SPECIALIZE_MIN_VAL
+#define SPECIALIZE_MIN_VAL(T, limit_value) \
+  template <>                              \
+  OF_DEVICE_FUNC T GetMinVal<T>() {        \
+    return limit_value;                    \
+  }
+OF_PP_FOR_EACH_TUPLE(SPECIALIZE_MIN_VAL, MIN_VAL_SEQ);
+#undef SPECIALIZE_MIN_VAL
 
 template <typename T>
 const T* GetZeroPtr() {
@@ -323,13 +324,13 @@ OF_DEVICE_FUNC T GetMinVal() {
   return *(T*)&ret;
 }
 
-// #if CUDA_VERSION >= 11000
-// template <>
-// OF_DEVICE_FUNC nv_bfloat16 GetMinVal<nv_bfloat16>() {
-//   uint16_t ret = 0xff7f;
-//   return *(nv_bfloat16*)&ret;
-// }
-// #endif  // CUDA_VERSION >= 11000
+#if CUDA_VERSION >= 11000
+template <>
+OF_DEVICE_FUNC nv_bfloat16 GetMinVal<nv_bfloat16>() {
+  uint16_t ret = 0xff7f;
+  return *(nv_bfloat16*)&ret;
+}
+#endif  // CUDA_VERSION >= 11000
 
 // template <DeviceType, typename T>
 // struct DevDType {

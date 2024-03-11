@@ -508,7 +508,7 @@ impl Worker {
         let mut selected_token_start_idx: i64 = 0;
         let mut categorized_sample_indices: Vec<Vec<u32>> = Vec::new();
         let mut selected_token_indices: Vec<i64> = Vec::new();
-        for _ in 0..SamplingType::Beam as usize {
+        for _ in 0..=SamplingType::Beam as usize {
             categorized_sample_indices.push(Vec::new());
         }
         let max_prompt_len = if let Some(n) = prompt_lens.iter().max() {

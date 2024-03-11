@@ -52,10 +52,10 @@ fn cuda_sort2_<F: TensorCreator>(
     tensor_creator: &mut F,
     stream: CUstream,
 ) -> candle_core::Result<(Tensor, Tensor)> {
-    let out = tensor_creator.new(t.shape(), t.dtype(), t.device(), false)?;
-    let indices = tensor_creator.new(out.shape(), DType::U32, t.device(), false)?;
+    //let out = tensor_creator.new(t.shape(), t.dtype(), t.device(), false)?;
+    let indices = tensor_creator.new(t.shape(), DType::U32, t.device(), false)?;
     let input_view = common::ffi::CTensorView::from(&t, false)?;
-    let output_view = common::ffi::CTensorView::from(&out, false)?;
+    //let output_view = common::ffi::CTensorView::from(&out, false)?;
     let indices_view = common::ffi::CTensorView::from(&indices, false)?;
     if dim == t.shape().dims().len() - 1 {
         unsafe {
@@ -65,9 +65,12 @@ fn cuda_sort2_<F: TensorCreator>(
                 indices_view.clone(),
                 stream,
             );
-            cuda_dim_gather_tensor(input_view, dim as c_uint, indices_view, stream, output_view);
+            //cuda_dim_gather_tensor(input_view, dim as c_uint, indices_view, stream, output_view);
         };
+        let output = t.gather(&indices, dim)?;
+        Ok((output, indices))
     } else {
+        unimplemented!("Unsupported non last dim sort")
         //let input = t.transpose(dim1, dim2)
         //     std::shared_ptr<std::vector<int32_t>> perm =
         //       JUST(GetPermWhenTransposeAxisToLastDim(input->ndim(), dim));
@@ -77,7 +80,6 @@ fn cuda_sort2_<F: TensorCreator>(
         //   indices = JUST(Transpose(indices_temp, *inversed_perm));
         //   values = JUST(DimGather(input, axis, indices, false));
     }
-    Ok((out, indices))
 }
 
 pub fn cuda_sort(

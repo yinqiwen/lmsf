@@ -1,5 +1,5 @@
 use candle_core::{DType, Device, IndexOp, Result, Tensor, D};
-use candle_nn::{Embedding, Module, VarBuilder};
+use candle_nn::{Module, VarBuilder};
 // use candle_transformers::models::with_tracing::{linear_no_bias as linear, Linear};
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -7,6 +7,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::model_executor::input_metadata::InputMetadata;
 use crate::model_executor::layers::Cache;
+use crate::model_executor::layers::Embedding;
 use crate::model_executor::layers::{PagedAttention, QKVLinear, RotaryEmbedding};
 use crate::model_executor::models::Model;
 use crate::tensor::{cuda_add_, TensorArena};
@@ -489,11 +490,26 @@ impl Block2 {
                 (hidden_states, residual)
             }
             None => {
-                let new_hidden_states = self.rms_1.forward_(&hidden_states, tensor_creator)?;
+                // if self.idx == 0 {
+                //     tracing::info!(
+                //         "enter layer:{}/ {}",
+                //         hidden_states.to_string(),
+                //         residual.is_none()
+                //     );
+                // }
+                let new_hidden_states =
+                    self.rms_1
+                        .forward_(&hidden_states, tensor_creator, self.idx == 0)?;
+                // if self.idx == 0 {
+                //     tracing::info!("after rms1:{}", new_hidden_states.to_string());
+                // }
                 let residual = hidden_states;
                 (new_hidden_states, residual)
             }
         };
+        // if self.idx == 0 {
+        //     tracing::info!("before attn:{}", hidden_states.to_string());
+        // }
 
         let hidden_states = self.attn.forward_(
             tensor_creator,
@@ -503,6 +519,9 @@ impl Block2 {
             cache,
             self.idx == 0,
         )?;
+        // if self.idx == 0 {
+        //     tracing::info!("after attn:{}", hidden_states.to_string());
+        // }
         self.rms_2.forward_residual_(&hidden_states, &residual)?;
 
         // let start = std::time::Instant::now();
@@ -590,32 +609,14 @@ impl Llama {
         //     }
         // };
         // let start = std::time::Instant::now();
-        // tracing::info!(
-        //     "before forward: x:{:?}, positions:{:?}",
-        //     x.to_string(),
-        //     positions.to_string()
-        // );
+
         let (_b_sz, seq_len) = x.dims2()?;
         let mut x = self.wte.forward(x)?;
-        // tracing::info!("after wte:{}", x.to_string());
+
         // cuda_dev.synchronize();
         // tracing::info!("wte cost {:?}", start.elapsed(),);
         let mut residual: Option<Tensor> = None;
         let start = std::time::Instant::now();
-        // if let Some(kv_caches) = kv_caches {
-        //     for (idx, block) in self.blocks.iter().enumerate() {
-        //         x = block.forward(
-        //             &x,
-        //             positions,
-        //             Some((&kv_caches[idx].0, &kv_caches[idx].1)),
-        //             input_metadata,
-        //         )?;
-        //     }
-        // } else {
-        //     for block in &self.blocks {
-        //         x = block.forward(&x, positions, None, input_metadata)?;
-        //     }
-        // }
 
         if let Some(kv_caches) = kv_caches {
             for (idx, block) in self.blocks.iter().enumerate() {
@@ -654,7 +655,7 @@ impl Llama {
         // cuda_dev.synchronize();
         // let start = std::time::Instant::now();
         // tracing::info!("x0 shape:{:?}/{}", x.shape(), x.to_string());
-        // tracing::info!("before ln_f:{:?}", x.to_string());
+        // tracing::info!("after layers:{:?}", x.to_string());
         //let x = self.ln_f.forward(&x)?;
         // tracing::info!("before ln_f0:{:?}", x.to_string());
         self.ln_f

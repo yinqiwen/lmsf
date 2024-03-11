@@ -15,6 +15,7 @@ limitations under the License.
 */
 // #include "oneflow/user/kernels/where_kernel_util.h"
 // #include "oneflow/core/ep/cuda/cuda_stream.h"
+#pragma once
 #include "tops/oneflow/common/cuda_util.h"
 #include "tops/oneflow/common/data_type.h"
 #include "tops/oneflow/kernel/elementwise.cuh"

@@ -436,20 +436,27 @@ fn beam_search_sample(
         let beam_width = sampling_params.best_of.unwrap();
         //seq_group_logprobs = logprobs[sample_idx:sample_idx + num_parent_seqs]
         let seq_group_logprobs = logprobs.i(sample_idx..sample_idx + num_parent_seqs)?;
+
         let (next_token_ids, parent_ids) = if *is_prompt {
             assert!(
                 num_parent_seqs == 1,
                 "Prompt input should have only one seq."
             );
             let parent_ids = [0_u32].repeat(2 * beam_width);
+            let datas = seq_group_logprobs
+                .i(0)?
+                .to_dtype(DType::F32)?
+                .to_vec1::<f32>()?;
             let (_, next_token_ids) = tops::cuda_topk(
                 &seq_group_logprobs.i(0)?,
                 2 * beam_width,
                 1,
                 std::ptr::null_mut(),
             )?;
+            // tracing::info!("####max:{:?}", max);
             // next_token_ids = next_token_ids.tolist()
             let next_token_ids = next_token_ids.to_vec1::<u32>()?;
+            // tracing::info!("####next_token_ids:{:?}", next_token_ids);
             (next_token_ids, parent_ids)
         } else {
             let cumulative_logprobs = seq_ids
@@ -458,13 +465,18 @@ fn beam_search_sample(
                 .collect::<Vec<_>>();
             let cumulative_logprobs =
                 Tensor::new(cumulative_logprobs, seq_group_logprobs.device())?;
-            let seq_group_logprobs = (seq_group_logprobs + cumulative_logprobs.unsqueeze(1))?;
+
+            let seq_group_logprobs =
+                seq_group_logprobs.broadcast_add(&cumulative_logprobs.unsqueeze(1)?)?;
+            //let seq_group_logprobs = (seq_group_logprobs + cumulative_logprobs.unsqueeze(1))?;
+
             let (_, topk_ids) = tops::cuda_topk(
                 &seq_group_logprobs.flatten_all()?,
                 2 * beam_width,
                 1,
                 std::ptr::null_mut(),
             )?;
+
             let topk_ids = topk_ids.to_vec1::<u32>()?;
             let vocab_size = *seq_group_logprobs.dims().last().unwrap();
             let parent_ids = topk_ids
@@ -488,20 +500,10 @@ fn sample(
     logprobs: &Tensor,
     sampling_metadata: &SamplingMetadata,
 ) -> candle_core::Result<Vec<(Vec<u32>, Vec<u32>)>> {
-    // categorized_seq_group_ids = {t: [] for t in SamplingType}
-    // categorized_sample_indices = sampling_metadata.categorized_sample_indices
-    // for i, seq_group in enumerate(sampling_metadata.seq_groups):
-    //     _, sampling_params = seq_group
-    //     sampling_type = sampling_params.sampling_type
-    //     categorized_seq_group_ids[sampling_type].append(i)
-
-    // sample_results_dict: Dict[int, Tuple[List[int], List[int]]] = {}
-    // sample_metadata = {}
-
     let start = std::time::Instant::now();
 
     let mut categorized_seq_group_ids: Vec<Vec<usize>> = Vec::new();
-    for i in 0..SamplingType::Beam as usize {
+    for i in 0..=SamplingType::Beam as usize {
         categorized_seq_group_ids.push(Vec::new());
     }
     for (i, (_, sampling_params)) in sampling_metadata.seq_groups.iter().enumerate() {
@@ -515,7 +517,7 @@ fn sample(
     let mut multinomial_samples: Option<Tensor> = None;
     let mut beam_search_logprobs: Option<Tensor> = None;
 
-    for i in 0..SamplingType::Beam as usize {
+    for i in 0..=SamplingType::Beam as usize {
         let sample_type = SamplingType::from_int(i).unwrap();
         if let Some(sample_indices) = sampling_metadata
             .categorized_sample_indices
@@ -562,7 +564,10 @@ fn sample(
                     multinomial_samples = Some(x);
                 }
                 SamplingType::Beam => {
-                    beam_search_logprobs = Some(logprobs.index_select(sample_indices, 0)?);
+                    let tmp = logprobs.index_select(sample_indices, 0)?;
+                    // tracing::info!("beam1 sample_indices:{:?}", sample_indices.to_string());
+                    // tracing::info!("beam1 result:{:?}", tmp.to_string());
+                    beam_search_logprobs = Some(tmp);
                 }
                 _ => {
                     candle_core::bail!("not supported sample type:{:?}", sample_type);
@@ -575,11 +580,12 @@ fn sample(
     // sample_results_dict: Dict[int, Tuple[List[int], List[int]]] = {}
     let mut sample_results_dict: BTreeMap<usize, (Vec<u32>, Vec<u32>)> = BTreeMap::new();
 
-    for i in 0..SamplingType::Beam as usize {
+    for i in 0..=SamplingType::Beam as usize {
         if let Some((seq_group_ids, seq_groups, is_prompts, sample_indices)) =
             sample_metadata.get(&i)
         {
             let sample_type = SamplingType::from_int(i).unwrap();
+
             let sample_results = match sample_type {
                 SamplingType::Greedy => {
                     greedy_sample(seq_groups, greedy_samples.as_ref().unwrap())?
@@ -599,7 +605,7 @@ fn sample(
                     candle_core::bail!("not supported sample type:{:?}", sample_type);
                 }
             };
-            // tracing::info!("sample_results:{:?}", sample_results);
+
             for (key, val) in seq_group_ids.iter().zip(sample_results.into_iter()) {
                 sample_results_dict.insert(*key, val);
             }
@@ -665,6 +671,7 @@ fn get_logprobs(
         }
         sample_idx += num_parent_seqs;
     }
+
     assert!(sample_idx == logprobs.dims()[0]);
 
     let index_length = batched_logprobs_query_seq_indices.len();
@@ -852,7 +859,7 @@ impl Sampler {
         mut logits: Tensor,
         sampling_metadata: SamplingMetadata,
     ) -> candle_core::Result<Option<SamplerOutput>> {
-        // tracing::info!("sample logits:{}", logits.to_string());
+        // tracing::info!("####sample logits:{}", logits.to_string());
         // self.cache.reset();
         self.arena.reset();
         // self.arena.print_stat();
@@ -897,6 +904,7 @@ impl Sampler {
         // # Use in-place division to avoid creating a new tensor.
         let temperatures = sampling_tensors.temperatures.unsqueeze(1)?;
         let mut logits = logits.broadcast_div(&temperatures)?;
+        // tracing::info!("#######logits result{:?}", logits.to_string());
         // cuda_dev.synchronize();
         // tracing::info!("sample 1.5 cost {:?}, {}", start.elapsed(), do_min_p);
         if do_top_p_top_k {
@@ -951,6 +959,8 @@ impl Sampler {
 
         // # Sample the next tokens.
         // sample_results = _sample(probs, logprobs, sampling_metadata)
+        // tracing::info!("#######probs result{:?}", probs.to_string());
+        // tracing::info!("#######logprobs result{:?}", logprobs.to_string());
         let sample_results = sample(probs, &logprobs, &sampling_metadata)?;
         // tracing::info!("sample result{:?}", sample_results);
         // cuda_dev.synchronize();

@@ -10,6 +10,15 @@ use anyhow::anyhow;
 
 use super::{block::LogicalTokenBlock, sampling_params::SamplingParams};
 
+pub struct RequestMetrics {
+    arrival_time: Instant,
+    last_token_time: Duration,
+    first_scheduled_time: Option<Duration>,
+    first_token_time: Option<Duration>,
+    time_in_queue: Option<Duration>,
+    finished_time: Option<Duration>,
+}
+
 #[derive(Clone, PartialEq, FromPrimitive, ToPrimitive, Debug)]
 pub enum SequenceState {
     Waiting = 0,
@@ -249,7 +258,7 @@ impl Sequence {
             seq_id: new_seq_id,
             prompt: self.prompt.clone(),
             block_size: self.block_size,
-            data: self.data.clone(),
+            data: Rc::new(RefCell::new(self.data.borrow().clone())),
             output_text: self.output_text.clone(),
             // latest_output_token: self.latest_output_token.clone(),
             gen_texts: self.gen_texts.clone(),

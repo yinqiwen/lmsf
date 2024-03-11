@@ -141,7 +141,7 @@ impl BlockSpaceManager {
             self.block_tables
                 .insert(seq.borrow().seq_id, block_table.clone());
         }
-        tracing::info!("###After Allocate :{:?}", self.block_tables);
+        // tracing::info!("###After Allocate :{:?}", self.block_tables);
         Ok(())
     }
 
@@ -191,7 +191,7 @@ impl BlockSpaceManager {
                 Ok(Some((last_block.block_number, new_block.block_number)))
             }
         } else {
-            tracing::error!("block_tables:{:?}", self.block_tables);
+            // tracing::error!("block_tables:{:?}", self.block_tables);
             Err(anyhow!("seq_id:{} not exist in block table", seq.seq_id))
         }
     }
@@ -311,11 +311,11 @@ impl BlockSpaceManager {
         if let Some(block_table) = self.block_tables.remove(&seq_id) {
             self.free_block_table(&block_table);
         }
-        tracing::info!(
-            "###After free:{} block_tables:{:?}",
-            seq_id,
-            self.block_tables
-        );
+        // tracing::info!(
+        //     "###After free:{} block_tables:{:?}",
+        //     seq_id,
+        //     self.block_tables
+        // );
     }
 
     pub fn reset(&mut self) {

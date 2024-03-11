@@ -23,14 +23,14 @@ serde = "1.0"
 anyhow = "1.0"
 metrics = "0.22.1"
 metrics-util = "0.16.2"
-candle-core = { version = "0.3.3" }
-candle-kernels = { version = "0.3.3" }
-candle-nn = { version = "0.3.3" }
-candle-transformers = { version = "0.3.3" }
+candle-core = { version = "0.4.1" }
+candle-kernels = { version = "0.4.1" }
+candle-nn = { version = "0.4.1" }
+candle-transformers = { version = "0.4.1" }
 # candle-flash-attn = { git = "https://github.com/huggingface/candle-flash-attn-v1.git", package = "candle-flash-attn-v1" }
 candle-flash-attn = { path = "/data/dev/rust/candle-flash-attn-v1", package = "candle-flash-attn-v1" }
 # candle-flash-attn = { version = "0.3.3" }
-half = "2.3.1"
+half = "2.4.0"
 libc = "0.2"
 # tera = "1"
 minijinja = { version = "1.0.12", features = ["default", "loader"] }

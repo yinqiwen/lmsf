@@ -16,7 +16,14 @@ async fn async_run(args: &EngineArgs) -> anyhow::Result<()> {
         .with_presence_penalty(0.2)
         .with_max_tokens(128);
 
-    for i in 0..3 {
+    // let sampling_params = SamplingParams::default()
+    //     .with_beam_search()
+    //     .with_n(3)
+    //     .with_best_of(3)
+    //     .with_temperature(0.0)
+    //     .with_max_tokens(2);
+
+    for i in 0..1 {
         let prompt = "To be or not to be,".to_string();
         let prompt = LLMPrompt::from(prompt);
         let start = std::time::Instant::now();
@@ -159,5 +166,5 @@ async fn main() {
     if let Err(e) = async_run(&args).await {
         tracing::error!("{}", e);
     }
-    tokio::time::sleep(Duration::from_secs(70)).await;
+    // tokio::time::sleep(Duration::from_secs(70)).await;
 }

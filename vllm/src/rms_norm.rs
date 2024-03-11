@@ -97,6 +97,7 @@ impl RmsNorm {
         &self,
         xs: &Tensor,
         tensor_creator: &mut F,
+        log_enable: bool,
     ) -> candle_core::Result<Tensor> {
         let hidden_size = *xs.dims().last().unwrap();
         let num_tokens = xs.elem_count() / hidden_size;
@@ -107,10 +108,16 @@ impl RmsNorm {
             num_tokens: num_tokens as i32,
             dtype: get_scalar_type(xs.dtype()),
         };
+        // if log_enable {
+        //     println!("####before vllm rms xs:{:?}", xs.to_string());
+        //     println!("####before vllm rms weight:{:?}", self.weight.to_string());
+        //     println!("####before vllm rms params:{:?}", params);
+        // }
         let weight_data = get_tensor_cuda_device_ptr(&self.weight)?;
         let xs_data = get_tensor_cuda_device_ptr(xs)?;
         let out = tensor_creator.new(xs.shape(), xs.dtype(), xs.device(), false)?;
         let out_data = get_tensor_cuda_device_ptr(&out)?;
+
         unsafe {
             vllm_rms_norm(
                 out_data.as_ffi_ptr(),
@@ -123,7 +130,7 @@ impl RmsNorm {
     }
     pub fn forward(&self, xs: &Tensor) -> candle_core::Result<Tensor> {
         let mut default_creator = DefaultTensorCreator {};
-        self.forward_(xs, &mut default_creator)
+        self.forward_(xs, &mut default_creator, false)
     }
 }
 

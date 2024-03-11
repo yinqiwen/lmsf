@@ -77,6 +77,7 @@ void cuda_cumsum_tensor(CTensorView input, uint32_t dim, cudaStream_t stream, CT
 
 void cuda_topk_tensor(CTensorView input, int k, int dim, int topk_type, cudaStream_t stream, CTensorView output,
                       CTensorView indices);
+void cuda_topk_indices(CTensorView input, int k, bool descend, cudaStream_t stream, CTensorView indices);
 
 void cuda_create_exponential_tensor(float lambd, cudaStream_t stream, CTensorView output);
 
