@@ -23,7 +23,8 @@ pub(crate) struct FCFS {}
 impl Policy for FCFS {
     fn get_priority(&self, now: Instant, seq_group: &SequenceGroup) -> usize {
         //now.saturating_sub(seq_group.arrival_time).as_secs() as usize
-        now.duration_since(seq_group.arrival_time).as_micros() as usize
+        now.duration_since(seq_group.metrics.arrival_time)
+            .as_micros() as usize
     }
 }
 

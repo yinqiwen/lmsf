@@ -1,23 +1,21 @@
 use minijinja::{context, Environment};
 use serde::Serialize;
 use std::collections::HashMap;
-pub trait ChatTemplate: Send {
-    fn apply(&self, input: &Vec<HashMap<String, String>>) -> anyhow::Result<String>;
-}
 
-pub struct JinjaTemplate {
+pub struct ChatTemplate {
     template: String,
     env: Environment<'static>,
 }
 
-impl JinjaTemplate {
+impl ChatTemplate {
     pub fn new(content: &str) -> anyhow::Result<Self> {
+        let content = content.replace(".strip()", "|trim");
         let mut env = Environment::new();
         let template_content = String::from(content);
-        env.add_template_owned("default", template_content)
+        env.add_template_owned("default", template_content.clone())
             .map_err(|e| anyhow::anyhow!("{}", e))?;
         Ok(Self {
-            template: String::from(content),
+            template: template_content,
             env,
         })
     }
@@ -98,7 +96,7 @@ fn test_chat_template() -> anyhow::Result<()> {
     // USE_DEFAULT_PROMPT=>false};
     // println!("##{}##", template.render(ctx).unwrap());
 
-    let t = JinjaTemplate::new(t)?;
+    let t = ChatTemplate::new(t)?;
     let mut ctx = context! { messages =>vec![
         context!(role => "system", content => "test"),
         context!(role => "user", content => "hello"),

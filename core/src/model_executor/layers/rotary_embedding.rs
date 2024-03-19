@@ -30,6 +30,7 @@ fn get_cos_sin_cache(
         .clone()
 }
 
+#[derive(Debug, Clone)]
 pub struct RotaryEmbedding {
     head_size: usize,
     num_key_value_heads: usize,

@@ -39,6 +39,9 @@ async-stream = "0.3.5"
 serde_json = "1.0"
 futures-core = "0.3"
 cudarc = { version = "0.9.14", features = ["f16"] }
-candle-ext = { git = "https://github.com/mokeyish/candle-ext.git", features = [
-    "cuda",
-] }
+strum = "0.26"
+strum_macros = "0.26"
+
+# candle-ext = { git = "https://github.com/mokeyish/candle-ext.git", features = [
+#     "cuda",
+# ] }

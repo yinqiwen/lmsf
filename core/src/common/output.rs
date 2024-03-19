@@ -1,6 +1,8 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Instant};
 
-use super::sequence::{PromptLogprobs, SampleLogprobs, SequenceGroup, SequenceState};
+use super::sequence::{
+    PromptLogprobs, SampleLogprobs, SequenceGroup, SequenceGroupRef, SequenceState,
+};
 
 #[derive(Debug, Clone)]
 pub struct CompletionOutput {
@@ -55,8 +57,9 @@ pub struct RequestOutput {
 }
 
 impl RequestOutput {
-    pub fn from(seq_group: &SequenceGroup) -> Self {
+    pub fn from(seq_group_ref: &SequenceGroupRef) -> Self {
         // # Get the top-n sequences.
+        let mut seq_group = seq_group_ref.borrow_mut();
         let n = seq_group.sampling_params.n;
         let mut seqs = seq_group.get_seqs(None);
 
@@ -116,6 +119,9 @@ impl RequestOutput {
         let prompt_token_ids = seq_group.prompt_token_ids();
         let prompt_logprobs = seq_group.prompt_logprobs.clone();
         let finished = seq_group.is_finished();
+        if finished {
+            seq_group.set_finished_time(Instant::now())
+        }
         Self {
             request_id: seq_group.request_id,
             prompt,

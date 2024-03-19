@@ -7,7 +7,6 @@ use candle_core::{
     },
     CpuStorage, CudaDevice, DType, Device, IndexOp, Layout, Shape, Storage, Tensor, D,
 };
-use candle_ext::TensorExt;
 
 struct ArgSort;
 impl candle_core::CustomOp1 for ArgSort {
@@ -318,6 +317,44 @@ fn test_broadcast_sub() -> candle_core::Result<()> {
     //     last.shape(),
     //     last.stride()
     // );
+    Ok(())
+}
+
+#[test]
+fn test_narrow() -> candle_core::Result<()> {
+    let device = candle_core::Device::new_cuda(0).unwrap();
+    let cuda_dev = match &device {
+        Device::Cuda(c) => c,
+        _ => {
+            candle_core::bail!("unexpected!")
+        }
+    };
+    cuda_dev.synchronize();
+    let (before_free, _) =
+        candle_core::cuda_backend::cudarc::driver::result::mem_get_info().unwrap();
+    println!("init gpu free:{} KB", before_free / 1024);
+    let test = Tensor::rand(1_f32, 10.0, (4096, 4096), &device)?;
+    cuda_dev.synchronize();
+    let (before_free, _) =
+        candle_core::cuda_backend::cudarc::driver::result::mem_get_info().unwrap();
+    println!("1 gpu free:{} KB", before_free / 1024);
+    let test1 = test.narrow(0, 0, 4096)?;
+    cuda_dev.synchronize();
+    let (before_free, _) =
+        candle_core::cuda_backend::cudarc::driver::result::mem_get_info().unwrap();
+    println!("2 gpu free:{} KB", before_free / 1024);
+
+    drop(test);
+    cuda_dev.synchronize();
+    let (before_free, _) =
+        candle_core::cuda_backend::cudarc::driver::result::mem_get_info().unwrap();
+    println!("free 1 gpu free:{} KB", before_free / 1024);
+    drop(test1);
+    cuda_dev.synchronize();
+    let (before_free, _) =
+        candle_core::cuda_backend::cudarc::driver::result::mem_get_info().unwrap();
+    println!("free 2 gpu free:{} KB", before_free / 1024);
+
     Ok(())
 }
 

@@ -6,6 +6,8 @@ use metrics::atomics::AtomicU64;
 
 const DEFAULT_MIN_BLOCK_SIZE: usize = 1024 * 1024;
 const ALLIGNMENT: usize = 64;
+
+#[derive(Debug)]
 struct TensorArenaUnit {
     cache: Tensor,
     curosr: AtomicUsize,
@@ -56,6 +58,7 @@ impl TensorArenaUnit {
     }
 }
 
+#[derive(Debug)]
 struct TensorArenaUnitGroup {
     group: Vec<TensorArenaUnit>,
     min_block_size: usize,
@@ -153,6 +156,7 @@ impl TensorArenaUnitGroup {
     }
 }
 
+#[derive(Debug)]
 pub struct TensorArena {
     cache: Vec<TensorArenaUnitGroup>,
     device: Device,

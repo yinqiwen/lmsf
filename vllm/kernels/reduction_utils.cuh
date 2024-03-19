@@ -1,5 +1,6 @@
 /*
- * Adapted from https://github.com/NVIDIA/FasterTransformer/blob/release/v5.3_tag/src/fastertransformer/kernels/reduce_kernel_utils.cuh
+ * Adapted from
+ * https://github.com/NVIDIA/FasterTransformer/blob/release/v5.3_tag/src/fastertransformer/kernels/reduce_kernel_utils.cuh
  * Copyright (c) 2023, The vLLM team.
  * Copyright (c) 2020-2023, NVIDIA CORPORATION.  All rights reserved.
  *
@@ -16,13 +17,13 @@
  * limitations under the License.
  */
 #pragma once
+#include <cstdint>
 
 #include "cuda_compat.h"
 
 namespace vllm {
 
-template<typename T>
-__inline__ __device__ T warpReduceSum(T val) {
+template <typename T> __inline__ __device__ T warpReduceSum(T val) {
 #pragma unroll
   for (int mask = 16; mask > 0; mask >>= 1)
     val += VLLM_SHFL_XOR_SYNC(val, mask);
@@ -30,8 +31,7 @@ __inline__ __device__ T warpReduceSum(T val) {
 }
 
 /* Calculate the sum of all elements in a block */
-template<typename T>
-__inline__ __device__ T blockReduceSum(T val) {
+template <typename T> __inline__ __device__ T blockReduceSum(T val) {
   static __shared__ T shared[32];
   int lane = threadIdx.x & 0x1f;
   int wid = threadIdx.x >> 5;

@@ -29,6 +29,7 @@ fn masked_fill(on_false: &Tensor, mask: &Tensor, on_true: f32) -> candle_core::R
 }
 
 const _PARTITION_SIZE: usize = 512;
+#[derive(Debug, Clone)]
 pub struct PagedAttention {
     num_attention_heads: usize,
     head_dim: usize,
@@ -115,6 +116,7 @@ impl PagedAttention {
         let query = query
             .reshape((batch_size, seq_len, self.num_attention_heads, self.head_dim))?
             .transpose(1, 2)?;
+
         let key = key
             .reshape((batch_size, seq_len, self.num_attention_heads, self.head_dim))?
             .transpose(1, 2)?;
@@ -134,15 +136,22 @@ impl PagedAttention {
             flash_attn(&query, &key, &value, softmax_scale, seq_len > 1)?.transpose(1, 2)?
         } else {
             let in_dtype = query.dtype();
-            let q = query.to_dtype(DType::F32)?;
-            let k: Tensor = key.to_dtype(DType::F32)?;
-            let v = value.to_dtype(DType::F32)?;
+            let q = query.to_dtype(DType::F32)?.contiguous()?;
+            let k: Tensor = key.to_dtype(DType::F32)?.contiguous()?;
+            let v = value.to_dtype(DType::F32)?.contiguous()?;
+            // println!(
+            //     "####is_contiguous {:?}/{:?}",
+            //     q.is_contiguous(),
+            //     k.is_contiguous()
+            // );
             let att = (q.matmul(&k.t()?)? / (self.head_dim as f64).sqrt())?;
+
             let mask = self.cache.mask(seq_len)?.broadcast_as(att.shape())?;
             let att = masked_fill(&att, &mask, f32::NEG_INFINITY)?;
             let att = tops::cuda_softmax(&att, D::Minus1, std::ptr::null_mut())?;
             //let att = candle_nn::ops::softmax(&att, D::Minus1)?;
             // Convert to contiguous as matmul doesn't support strided vs for now.
+
             att.matmul(&v.contiguous()?)?.to_dtype(in_dtype)?
         };
         let y = y.transpose(1, 2)?;

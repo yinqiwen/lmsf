@@ -863,13 +863,13 @@ impl Sampler {
         // self.cache.reset();
         self.arena.reset();
         // self.arena.print_stat();
-        let cuda_dev = match logits.device() {
-            Device::Cuda(cuda) => cuda.clone(),
-            _ => {
-                candle_core::bail!("")
-            }
-        };
-        cuda_dev.synchronize();
+        // let cuda_dev = match logits.device() {
+        //     Device::Cuda(cuda) => cuda.clone(),
+        //     _ => {
+        //         candle_core::bail!("")
+        //     }
+        // };
+        // cuda_dev.synchronize();
 
         let (_, vocab_size) = logits.shape().dims2()?;
         if !sampling_metadata.perform_sampling {
@@ -899,7 +899,7 @@ impl Sampler {
             )?;
         }
 
-        // tracing::info!("sample 1 cost {:?}", start.elapsed());
+        // tracing::info!("sample 1 logits {:?}", logits.to_string());
         // # Apply temperature scaling.
         // # Use in-place division to avoid creating a new tensor.
         let temperatures = sampling_tensors.temperatures.unsqueeze(1)?;
@@ -926,8 +926,7 @@ impl Sampler {
             logits = apply_min_p(&mut self.arena, logits, sampling_tensors.min_ps)?;
         }
 
-        // cuda_dev.synchronize();
-        // tracing::info!("sample 2 cost {:?}", start.elapsed());
+        // tracing::info!("sample 2 logits {:?}", logits.to_string());
 
         let logits = logits.to_dtype(DType::F32)?;
         //let probs = candle_nn::ops::softmax(&logits, D::Minus1)?;
@@ -937,6 +936,9 @@ impl Sampler {
         //let logprobs = candle_nn::ops::log_softmax(&logits, D::Minus1)?;
         let logprobs =
             tops::cuda_log_softmax_(&logits, D::Minus1, &mut self.arena, std::ptr::null_mut())?;
+
+        // tracing::info!("sample logprobs {:?}", logprobs.to_string());
+        // tracing::info!("sample probs {:?}", probs.to_string());
 
         // cuda_dev.synchronize();
         // tracing::info!("sample 4 cost {:?}", start.elapsed());
@@ -968,8 +970,8 @@ impl Sampler {
         // tracing::info!("sample:{:?}", sample_results);
         let (prompt_logprobs, sample_logprobs) =
             get_logprobs(logprobs, &sampling_metadata, &sample_results)?;
-        // cuda_dev.synchronize();
-        // tracing::info!("sample 6 cost {:?}", start.elapsed());
+
+        // tracing::info!("sample sample_results {:?}", sample_results);
 
         let result = build_sampler_output(
             sample_results,
@@ -977,7 +979,7 @@ impl Sampler {
             prompt_logprobs,
             sample_logprobs,
         )?;
-
+        // tracing::info!("sample result {:?}", result);
         // tracing::info!("sample forward cost {:?}", start.elapsed());
         metrics::histogram!("sample_forward").record(start.elapsed().as_secs_f64());
 

@@ -16,6 +16,8 @@ use crate::SamplingParams;
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::thread::sleep;
+use std::time::Duration;
 
 use super::cache_engine::CacheEngine;
 
@@ -39,18 +41,12 @@ impl Worker {
     ) -> Result<Self> {
         let device = candle_core::Device::new_cuda(rank)?;
         let mut filenames: Vec<String> = vec![];
-        for rfilename in model_config.get_safetensors() {
-            let path = format!("{}/{}", model_config.dir(), rfilename);
+        for rfilename in model_config.get_model_weight_files() {
+            let path = format!("{}/{}", model_config.path(), rfilename);
             filenames.push(path);
         }
         tracing::info!("files:{:?}", filenames);
-        let vb = unsafe {
-            candle_nn::VarBuilder::from_mmaped_safetensors(
-                &filenames,
-                model_config.get_dtype(),
-                &device,
-            )?
-        };
+
         let cuda_device = if let Device::Cuda(cuda_dev) = &device {
             cuda_dev
         } else {
@@ -58,7 +54,15 @@ impl Worker {
         };
         // let cache_ops = CacheOps::new(cuda_device)?;
         //CacheEngine::new(cache_config, model_config.clone(), parallel_config.clone())?;
-        let model = ModelFactory::load_model("llama", model_config.inner(), vb)?;
+        let model = ModelFactory::load_model(
+            model_config.path(),
+            model_config.get_quantize_type(),
+            model_config.inner(),
+            &filenames,
+            &device,
+        )?;
+
+        cuda_device.synchronize();
         let (free, total) = candle_core::cuda_backend::cudarc::driver::result::mem_get_info()?;
         tracing::info!("GPU free:{}, total:{} after load model.", free, total);
 

@@ -3,6 +3,7 @@ use metrics::{counter, gauge, histogram};
 use std::sync::atomic::AtomicU64;
 use std::{
     collections::{HashMap, HashSet},
+    ops::DerefMut,
     str::FromStr,
     sync::{Arc, Mutex},
     thread::JoinHandle,
@@ -22,7 +23,7 @@ use crate::{
         },
         tokenizer::{decode_token, detokenize_incrementally, DecodeTokenOptions},
     },
-    model_executor::models::{ChatTemplate, ModelFactory, TokenizerConfig},
+    model_executor::models::{ChatTemplate, ModelFactory},
     sched::scheduler::{Scheduler, SchedulerOutputs},
     worker::model_worker::Worker,
 };
@@ -57,33 +58,19 @@ struct LLMTask {
     responder: LLMTaskResponder,
 }
 
-struct TokenizerIds {
-    eos_token_id: u32,
-}
-impl TokenizerIds {
-    fn from(tokenizer_config: Box<dyn TokenizerConfig>, tokenizer: &Tokenizer) -> Result<Self> {
-        let eos_token_ids = tokenizer
-            .encode(tokenizer_config.get_eos_token(), false)
-            .map_err(|e| anyhow!("{}", e))?;
-        let eos_token_id = eos_token_ids.get_ids()[0];
-        Ok(TokenizerIds { eos_token_id })
-    }
-}
-
 pub struct LLMEngine {
     cache_config: CacheConfig,
     model_config: Arc<ModelConfig>,
     tokenizer: Tokenizer,
-    tokenizer_ids: TokenizerIds,
     scheduler: Scheduler,
     worker: Worker,
-    chat_template: Option<Box<dyn ChatTemplate>>,
+    chat_template: Option<ChatTemplate>,
     seq_counter: AtomicU64,
 }
 
 impl LLMEngine {
     pub fn get_model(&self) -> &str {
-        self.model_config.dir()
+        self.model_config.path()
     }
 
     pub fn from(
@@ -99,22 +86,25 @@ impl LLMEngine {
             parallel_config,
             scheduler_config
         );
-
-        let model_dir = model_config.dir();
-        let tokenizer_filename = format!("{}/tokenizer.json", model_dir);
-        let tokenizer_config_filename = format!("{}/tokenizer_config.json", model_dir);
-        let tokenizer = Tokenizer::from_file(tokenizer_filename).map_err(anyhow::Error::msg)?;
         let model_config = Arc::new(model_config);
 
-        let tokenizer_config = ModelFactory::load_tokenizer_config(
-            model_config.inner().get_model_type(),
-            tokenizer_config_filename,
-        )?;
-        let chat_template = ModelFactory::get_chat_template(
-            model_config.inner().get_model_type(),
-            tokenizer_config.get_chat_template(),
-        )?;
-        let tokenizer_ids = TokenizerIds::from(tokenizer_config, &tokenizer)?;
+        let model_path = model_config.path();
+
+        let chat_template = ModelFactory::get_chat_template(model_path)?;
+
+        let tokenizer_filename = format!("{}/tokenizer.json", model_path);
+        // let tokenizer_config_filename = format!("{}/tokenizer_config.json", model_path);
+        let tokenizer = Tokenizer::from_file(tokenizer_filename).map_err(anyhow::Error::msg)?;
+
+        // let tokenizer_config = ModelFactory::load_tokenizer_config(
+        //     model_config.inner().get_model_type(),
+        //     tokenizer_config_filename,
+        // )?;
+        // let chat_template = ModelFactory::get_chat_template(
+        //     model_config.inner().get_model_type(),
+        //     tokenizer_config.get_chat_template(),
+        // )?;
+        // let tokenizer_ids = TokenizerIds::from(tokenizer_config, &tokenizer)?;
         let mut worker = Worker::from(&cache_config, model_config.clone(), &parallel_config, 0)?;
         tops::reset_random_seed(model_config.seed);
         //worker.profile_run()?;
@@ -132,7 +122,7 @@ impl LLMEngine {
             cache_config,
             model_config,
             tokenizer,
-            tokenizer_ids,
+            // tokenizer_ids,
             scheduler,
             worker,
             chat_template,
@@ -193,7 +183,7 @@ impl LLMEngine {
         &self,
         seq_mut: &mut Sequence,
         prms: &SamplingParams,
-        arrival_time: &Instant,
+        // arrival_time: &Instant,
     ) -> Result<()> {
         //self.tokenizer.decode(ids, skip_special_tokens);
         // let mut seq_mut = seq.borrow_mut();
@@ -256,7 +246,7 @@ impl LLMEngine {
         }
 
         if !sampling_params.ignore_eos
-            && seq_mut.get_last_token_id() == self.tokenizer_ids.eos_token_id
+            && seq_mut.get_last_token_id() == self.model_config.get_eos_token_id()
         {
             seq_mut.update_state(SequenceState::FinishedStopeed);
             return true;
@@ -281,7 +271,7 @@ impl LLMEngine {
         let current_worst_score = current_worst_seq.borrow().get_beam_search_score(
             length_penalty,
             None,
-            Some(self.tokenizer_ids.eos_token_id),
+            Some(self.model_config.get_eos_token_id()),
         );
         let mut highest_attainable_score: f32 = 0.0;
         match sampling_params.early_stopping {
@@ -289,7 +279,7 @@ impl LLMEngine {
                 highest_attainable_score = best_running_seq.borrow().get_beam_search_score(
                     length_penalty,
                     None,
-                    Some(self.tokenizer_ids.eos_token_id),
+                    Some(self.model_config.get_eos_token_id()),
                 );
             }
             EarlyStopType::Never => {
@@ -301,13 +291,13 @@ impl LLMEngine {
                     highest_attainable_score = best_running_seq.borrow().get_beam_search_score(
                         length_penalty,
                         Some(max_possible_length),
-                        Some(self.tokenizer_ids.eos_token_id),
+                        Some(self.model_config.get_eos_token_id()),
                     );
                 } else {
                     highest_attainable_score = best_running_seq.borrow().get_beam_search_score(
                         length_penalty,
                         None,
-                        Some(self.tokenizer_ids.eos_token_id),
+                        Some(self.model_config.get_eos_token_id()),
                     );
                 }
             }
@@ -379,7 +369,7 @@ impl LLMEngine {
             self.decode_sequence(
                 mut_seq,
                 &seq_group_borrow.sampling_params,
-                &seq_group_borrow.arrival_time,
+                // &seq_group_borrow.arrival_time,
             )?;
             if self.check_stop(mut_seq, &seq_group_borrow.sampling_params) {
                 tracing::info!("seq stop:{:?}", mut_seq.get_state());
@@ -407,7 +397,7 @@ impl LLMEngine {
         let mut selected_child_seqs = Vec::new();
         let mut unselected_child_seqs = Vec::new();
         let beam_width = seq_group_borrow.sampling_params.best_of.unwrap();
-        let eos_token_id = self.tokenizer_ids.eos_token_id;
+        let eos_token_id = self.model_config.get_eos_token_id();
         let length_penalty = seq_group_borrow.sampling_params.length_penalty;
         let mut existing_finished_seqs = existing_finished_seqs
             .into_iter()
@@ -515,6 +505,7 @@ impl LLMEngine {
         output: SamplerOutput,
         scheduler_outputs: SchedulerOutputs,
     ) -> Result<Vec<RequestOutput>> {
+        let now = Instant::now();
         for (seq_group, outputs) in scheduler_outputs
             .scheduled_seq_groups
             .iter()
@@ -527,11 +518,12 @@ impl LLMEngine {
 
         let mut request_outputs = Vec::new();
         for seq_group in scheduler_outputs.scheduled_seq_groups {
-            let request_output = RequestOutput::from(&seq_group.borrow());
+            seq_group.borrow_mut().maybe_set_first_token_time(now);
+            let request_output = RequestOutput::from(&seq_group);
             request_outputs.push(request_output);
         }
         for seq_group in scheduler_outputs.ignored_seq_groups {
-            let request_output = RequestOutput::from(&seq_group.borrow());
+            let request_output = RequestOutput::from(&seq_group);
             request_outputs.push(request_output);
         }
 
@@ -543,13 +535,16 @@ impl LLMEngine {
         if sched_result.is_empty() {
             let mut outputs = Vec::new();
             for seq_group in sched_result.ignored_seq_groups {
-                outputs.push(RequestOutput::from(&seq_group.borrow()));
+                outputs.push(RequestOutput::from(&seq_group));
             }
             return Ok(outputs);
         }
 
+        let now = Instant::now();
         let mut seq_group_metadata_list: Vec<SequenceGroupMetadata> = Vec::new();
         for seq_group in &sched_result.scheduled_seq_groups {
+            seq_group.borrow_mut().maybe_set_first_scheduled_time(now);
+
             let mut seq_data = HashMap::new();
             let mut block_tables = HashMap::new();
             let seq_group = seq_group.borrow();
@@ -751,7 +746,7 @@ impl AsyncLLMEngine {
     ) -> Self {
         let (notify_sender, notify_rx) = oneshot::channel::<()>();
         let (s, receiver) = mpsc::unbounded_channel();
-        let model = String::from(model_config.dir());
+        let model = String::from(model_config.path());
         let h: JoinHandle<()> = std::thread::spawn(move || {
             match LLMEngine::from(
                 model_config,

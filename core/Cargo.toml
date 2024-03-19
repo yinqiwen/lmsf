@@ -23,7 +23,9 @@ half = { workspace = true }
 minijinja = { workspace = true }
 uuid = { workspace = true }
 serde_json = { workspace = true }
-candle-ext = { workspace = true }
+# candle-ext = { workspace = true }
+strum = { workspace = true }
+strum_macros = { workspace = true }
 
 tokenizers = { version = "0.13.4", default-features = false, features = [
     "onig",

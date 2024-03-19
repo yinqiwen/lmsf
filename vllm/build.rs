@@ -7,12 +7,13 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::SystemTime;
 
-const KERNEL_FILES: [&str; 5] = [
+const KERNEL_FILES: [&str; 6] = [
     "cache_kernels.cu",
     "pos_encoding_kernels.cu",
     "attention/attention_kernels.cu",
     "layernorm_kernels.cu",
     "activation_kernels.cu",
+    "quantization/awq/gemm_kernels.cu",
 ];
 
 fn is_dir_modified(dir: &Path, out_modified: &Result<SystemTime, std::io::Error>) -> bool {
@@ -69,7 +70,10 @@ fn main() -> Result<()> {
         }
     };
     set_cuda_include_dir()?;
-    std::fs::create_dir_all(out_dir.join("attention")).expect("Failed to create output directory");
+    std::fs::create_dir_all(out_dir.join("attention"))
+        .expect("Failed to create output attention directory");
+    std::fs::create_dir_all(out_dir.join("quantization/awq"))
+        .expect("Failed to create output quantization/awq directory");
 
     let ccbin_env = std::env::var("CANDLE_NVCC_CCBIN");
     println!("cargo:rerun-if-env-changed=CANDLE_NVCC_CCBIN");

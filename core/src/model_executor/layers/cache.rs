@@ -3,7 +3,7 @@ use candle_core::{Device, Result, Tensor};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Cache {
     masks: Arc<Mutex<HashMap<usize, Tensor>>>,
     // pub use_kv_cache: bool,

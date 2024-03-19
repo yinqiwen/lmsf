@@ -8,7 +8,7 @@ use lmsf_core::{
 
 async fn async_run(args: &EngineArgs) -> anyhow::Result<()> {
     let (model_cfg, cache_cfg, parallel_cfg, sched_cfg) = args.create_engine_configs()?;
-    let runner = AsyncLLMEngine::new(model_cfg, cache_cfg, parallel_cfg, sched_cfg, true).await;
+    let runner = AsyncLLMEngine::new(model_cfg, cache_cfg, parallel_cfg, sched_cfg, false).await;
 
     let sampling_params = SamplingParams::default()
         .with_temperature(0.8)

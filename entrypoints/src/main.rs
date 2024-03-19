@@ -10,9 +10,22 @@ use serde::{Deserialize, Serialize};
 
 mod openai;
 
+#[derive(Parser, Debug)]
+#[clap(author, version, about, long_about = None)]
+struct ServerArgs {
+    #[clap(default_value = "8000", long, help = "api server port")]
+    port: u16,
+    #[clap(default_value = "0.0.0.0", long, help = "api server host")]
+    host: String,
+
+    #[command(flatten)]
+    engine_args: EngineArgs,
+}
+
 #[tokio::main]
 async fn main() {
-    let args = EngineArgs::parse();
+    let mut server_args = ServerArgs::parse();
+    let args = &server_args.engine_args;
     common::init_tracing(
         args.log_dir.as_ref().map(|x| x.as_str()),
         args.alsologtostderr,
@@ -39,7 +52,7 @@ async fn main() {
 
     let app = app.layer(Extension(engine));
     // run our app with hyper, listening globally on port 3000
-    let addr = format!("{}:{}", args.host, args.port);
+    let addr = format!("{}:{}", server_args.host, server_args.port);
     tracing::info!("Start API Server at address:{}", addr);
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();

@@ -2,31 +2,32 @@ use std::collections::{HashMap, HashSet};
 
 use anyhow::{anyhow, Result};
 use candle_core::DType;
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 
-use crate::model_executor::models::{ModelConfig as PretrainedModelConfig, ModelFactory};
+use crate::model_executor::models::{
+    ModelConfig as PretrainedModelConfig, ModelFactory, ModelType, QuantizeType,
+};
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
 pub struct EngineArgs {
     #[clap(default_value = "4", long)]
     pub threads: usize,
-    // #[clap(default_value = "", long, env)]
-    // #[redact(partial)]
-    // model_id: String,
+
     #[clap(
         default_value = "facebook/opt-125m",
         long,
-        help = "name or path of the huggingface model to use"
+        help = "path of the huggingface model to use"
     )]
     model: String,
 
-    #[clap(
-        default_value = "",
-        long,
-        help = "name or path of the huggingface tokenizer to use"
-    )]
-    tokenizer: String,
+    // #[clap(long, help = "specify model_type")]
+    // model_type: Option<ModelType>,
+    #[clap(long, help = "specify quantize method")]
+    quantization: Option<QuantizeType>,
+
+    #[clap(default_value = "", long, help = "chat template config file")]
+    chat_template: Option<String>,
 
     // Parallel arguments
     #[clap(default_value = "1", long = "pp", help = "number of pipeline stages")]
@@ -77,11 +78,6 @@ pub struct EngineArgs {
     )]
     gpu_memory_utilization: f32,
 
-    #[clap(default_value = "8000", long, help = "api server port")]
-    pub port: u16,
-    #[clap(default_value = "0.0.0.0", long, help = "api server host")]
-    pub host: String,
-
     #[clap(long, help = "log dir")]
     pub log_dir: Option<String>,
 
@@ -93,7 +89,12 @@ impl EngineArgs {
     pub fn create_engine_configs(
         &self,
     ) -> Result<(ModelConfig, CacheConfig, ParallelConfig, SchedulerConfig)> {
-        let model_cfg = ModelConfig::new(self.model.as_str(), self.max_model_len, self.seed)?;
+        let model_cfg = ModelConfig::new(
+            self.model.as_str(),
+            self.quantization,
+            self.max_model_len,
+            self.seed,
+        )?;
         tracing::info!("{:?}", model_cfg);
         let parallel_cfg = ParallelConfig {
             pipeline_parallel_size: self.pipeline_parallel_size,
@@ -116,29 +117,27 @@ impl EngineArgs {
     }
 }
 
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
-pub struct SafeTensorsIndex {
-    weight_map: HashMap<String, String>,
-}
-
 #[derive(Debug)]
 pub struct ModelConfig {
     cfg: Box<dyn PretrainedModelConfig>,
-    // safetensors_index: SafeTensorsIndex,
-    safetensors: Vec<String>,
-    dir: String,
+    quantize_type: Option<QuantizeType>,
+    model_weight_files: Vec<String>,
+    path: String,
     dtype: DType,
     max_model_len: usize,
     pub(crate) seed: u64,
 }
 
 impl ModelConfig {
-    pub fn new(model_dir: &str, max_model_len: Option<usize>, seed: u64) -> Result<Self> {
-        let config_path = format!("{}/config.json", model_dir);
-        let cfg_data =
-            std::fs::read_to_string(config_path).expect("Should have been able to read the file");
+    pub fn new(
+        model_path: &str,
+        quantize_type: Option<QuantizeType>,
+        max_model_len: Option<usize>,
+        seed: u64,
+    ) -> Result<Self> {
+        let model_weight_files = ModelFactory::get_model_weight_files(model_path, quantize_type)?;
 
-        let modle_cfg = ModelFactory::new_model_config(&cfg_data)?;
+        let modle_cfg = ModelFactory::new_model_config(model_path, quantize_type)?;
 
         let dtype = modle_cfg.get_dtype()?;
         let max_len = if let Some(n) = max_model_len {
@@ -154,19 +153,11 @@ impl ModelConfig {
             modle_cfg.max_model_len()
         };
 
-        let safetensors_index_path = format!("{}/model.safetensors.index.json", model_dir);
-        let safetensors_index: SafeTensorsIndex =
-            serde_json::from_str(std::fs::read_to_string(safetensors_index_path)?.as_str())?;
-        let mut safetensors: HashSet<String> = HashSet::new();
-        for (_, value) in safetensors_index.weight_map.iter() {
-            safetensors.insert(String::from(value));
-        }
-        let mut safetensors: Vec<_> = safetensors.into_iter().collect();
-        safetensors.sort();
         Ok(Self {
             cfg: modle_cfg,
-            safetensors,
-            dir: String::from(model_dir),
+            quantize_type,
+            model_weight_files,
+            path: String::from(model_path),
             dtype,
             max_model_len: max_len,
             seed,
@@ -177,11 +168,12 @@ impl ModelConfig {
         self.cfg.as_ref()
     }
 
-    pub fn dir(&self) -> &str {
-        self.dir.as_str()
+    pub fn path(&self) -> &str {
+        self.path.as_str()
     }
-    pub fn get_safetensors(&self) -> &Vec<String> {
-        &self.safetensors
+
+    pub fn get_model_weight_files(&self) -> &Vec<String> {
+        &self.model_weight_files
     }
     pub fn get_dtype(&self) -> DType {
         self.dtype
@@ -211,6 +203,19 @@ impl ModelConfig {
 
     pub fn get_vocab_size(&self) -> usize {
         self.cfg.get_vocab_size()
+    }
+
+    pub fn get_bos_token_id(&self) -> u32 {
+        self.cfg.get_bos_token_id()
+    }
+    pub fn get_eos_token_id(&self) -> u32 {
+        self.cfg.get_eos_token_id()
+    }
+    pub fn get_model_type(&self) -> ModelType {
+        self.cfg.get_model_type()
+    }
+    pub fn get_quantize_type(&self) -> Option<QuantizeType> {
+        self.quantize_type
     }
 }
 

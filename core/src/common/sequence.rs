@@ -10,13 +10,27 @@ use anyhow::anyhow;
 
 use super::{block::LogicalTokenBlock, sampling_params::SamplingParams};
 
+#[derive(Clone, Debug)]
 pub struct RequestMetrics {
-    arrival_time: Instant,
-    last_token_time: Duration,
-    first_scheduled_time: Option<Duration>,
-    first_token_time: Option<Duration>,
+    pub(crate) arrival_time: Instant,
+    last_token_time: Instant,
+    first_scheduled_time: Option<Instant>,
+    first_token_time: Option<Instant>,
     time_in_queue: Option<Duration>,
-    finished_time: Option<Duration>,
+    finished_time: Option<Instant>,
+}
+
+impl RequestMetrics {
+    pub fn new(arrival_time: Instant) -> Self {
+        Self {
+            arrival_time,
+            last_token_time: arrival_time,
+            first_scheduled_time: None,
+            first_token_time: None,
+            time_in_queue: None,
+            finished_time: None,
+        }
+    }
 }
 
 #[derive(Clone, PartialEq, FromPrimitive, ToPrimitive, Debug)]
@@ -277,7 +291,7 @@ pub struct SequenceGroup {
     pub(crate) request_id: u64,
     seqs: HashMap<u64, SequenceRef>,
     pub(crate) sampling_params: Arc<SamplingParams>,
-    pub(crate) arrival_time: Instant,
+    pub(crate) metrics: RequestMetrics,
     pub(crate) prompt_logprobs: Option<Arc<PromptLogprobs>>,
 }
 
@@ -301,10 +315,34 @@ impl SequenceGroup {
             request_id,
             seqs: seq_map,
             sampling_params: Arc::new(sampling_params),
-            arrival_time,
+            metrics: RequestMetrics::new(arrival_time),
             prompt_logprobs: None,
         }
     }
+
+    pub fn get_last_latency(&mut self, now: Instant) -> Duration {
+        let latency = now.duration_since(self.metrics.last_token_time);
+        self.metrics.last_token_time = now;
+        latency
+    }
+
+    pub fn maybe_set_first_token_time(&mut self, time: Instant) {
+        if self.metrics.first_token_time.is_none() {
+            self.metrics.first_token_time = Some(time);
+        }
+    }
+
+    pub fn maybe_set_first_scheduled_time(&mut self, time: Instant) {
+        if self.metrics.first_scheduled_time.is_none() {
+            self.metrics.first_scheduled_time = Some(time);
+            self.metrics.time_in_queue = Some(time.duration_since(self.metrics.arrival_time));
+        }
+    }
+
+    pub fn set_finished_time(&mut self, time: Instant) {
+        self.metrics.finished_time = Some(time);
+    }
+
     pub fn set_prompt_logprobs(&mut self, prompt_logprobs: PromptLogprobs) {
         self.prompt_logprobs = Some(Arc::new(prompt_logprobs));
     }

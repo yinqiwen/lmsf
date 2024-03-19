@@ -34,6 +34,9 @@ BINARY_OP_OUT(__half, int64_t, __half, bmul_f16_i64, x *y)
 BINARY_OP_OUT(__half, uint8_t, __half, bmul_f16_u8, x *y)
 #endif
 
+BINARY_OP_OUT(float, int64_t, float, bmul_f32_i64, x *y)
+BINARY_OP_OUT(float, uint8_t, float, bmul_f32_u8, x *y)
+
 // BINARY_OP(float, badd_f32, x + y)
 // BINARY_OP(double, badd_f64, x + y);
 // BINARY_OP(uint8_t, badd_u8, x + y);
