@@ -1,5 +1,5 @@
-use candle_core::cuda_backend::cudarc::driver::sys::CUstream;
-use candle_core::{CpuStorage, CudaStorage, DType, Device, Layout, Shape, Tensor};
+use candle::cuda_backend::cudarc::driver::sys::CUstream;
+use candle::{CpuStorage, CudaStorage, DType, Device, Layout, Shape, Tensor};
 use common::{
     ffi::get_scalar_type,
     ffi::{CTensorView, ScalarType},
@@ -15,11 +15,7 @@ extern "C" {
     fn cuda_create_exponential_tensor(lambd: f32, stream: CUstream, output: CTensorView);
 }
 
-pub fn cuda_tensor_exponential(
-    t: &Tensor,
-    lambd: f32,
-    stream: CUstream,
-) -> candle_core::Result<()> {
+pub fn cuda_tensor_exponential(t: &Tensor, lambd: f32, stream: CUstream) -> candle::Result<()> {
     let output_view = common::ffi::CTensorView::from(t, false)?;
     unsafe {
         cuda_create_exponential_tensor(lambd, stream, output_view);
@@ -28,7 +24,7 @@ pub fn cuda_tensor_exponential(
 }
 
 #[test]
-fn test_sort() -> candle_core::Result<()> {
+fn test_sort() -> candle::Result<()> {
     let device = Device::new_cuda(0)?;
     let a = Tensor::zeros(8, DType::F32, &device)?;
     let stream: CUstream = std::ptr::null_mut();

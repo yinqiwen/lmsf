@@ -1,6 +1,6 @@
-use candle_core::safetensors::MmapedSafetensors;
-use candle_core::IndexOp;
-use candle_core::{DType, Device, Tensor, D};
+use candle::safetensors::MmapedSafetensors;
+use candle::IndexOp;
+use candle::{DType, Device, Tensor, D};
 use std::clone;
 use std::sync::Arc;
 
@@ -83,7 +83,7 @@ impl RotaryEmbedding {
         max_position_embeddings: usize,
         rope_theta: f32,
         is_neox_style: bool,
-    ) -> candle_core::Result<Self> {
+    ) -> candle::Result<Self> {
         // get_cos_sin_cache(base, rotary_dim, max_position_embeddings, dtype, device)
         // let cos_sin_cache = compute_cos_sin_cache(
         //     rotary_dim,
@@ -119,12 +119,7 @@ impl RotaryEmbedding {
             ),
         })
     }
-    pub fn forward(
-        &self,
-        position: &Tensor,
-        query: &Tensor,
-        key: &Tensor,
-    ) -> candle_core::Result<()> {
+    pub fn forward(&self, position: &Tensor, query: &Tensor, key: &Tensor) -> candle::Result<()> {
         // // q,k shape  //[batch_size, seq_len, num_heads * head_size]
         let (b_sz, seq_len, hidden_size) = query.dims3()?;
         // let fwd_q = query.reshape((b_sz * seq_len, self.num_key_value_heads, self.head_size))?;
@@ -145,7 +140,7 @@ impl RotaryEmbedding {
 }
 
 #[test]
-fn test_() -> candle_core::Result<()> {
+fn test_() -> candle::Result<()> {
     let cuda_dev = Device::new_cuda(0)?;
     let st = unsafe { MmapedSafetensors::new("/data/dev/rust/lmsf/test_qkv")? };
     let qkv = st.load("qkv", &cuda_dev)?;

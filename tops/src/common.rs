@@ -1,6 +1,6 @@
-use candle_core::Shape;
+use candle::Shape;
 
-pub(crate) fn get_column_major_dim(s: &Shape, dim: usize) -> candle_core::Result<usize> {
+pub(crate) fn get_column_major_dim(s: &Shape, dim: usize) -> candle::Result<usize> {
     if s.dims().len() == 1 {
         Ok(0)
     } else if s.dims().len() == 2 {
@@ -9,9 +9,9 @@ pub(crate) fn get_column_major_dim(s: &Shape, dim: usize) -> candle_core::Result
         } else if dim == 0 {
             Ok(1_usize)
         } else {
-            candle_core::bail!("Invalid dim:{:?}", dim)
+            candle::bail!("Invalid dim:{:?}", dim)
         }
     } else {
-        candle_core::bail!("Not supported shapes:{:?}", s)
+        candle::bail!("Not supported shapes:{:?}", s)
     }
 }

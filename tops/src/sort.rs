@@ -1,5 +1,5 @@
-use candle_core::cuda_backend::cudarc::driver::sys::CUstream;
-use candle_core::{CpuStorage, CudaStorage, DType, Device, Layout, Shape, Tensor};
+use candle::cuda_backend::cudarc::driver::sys::CUstream;
+use candle::{CpuStorage, CudaStorage, DType, Device, Layout, Shape, Tensor};
 use common::{
     ffi::get_scalar_type,
     ffi::{CTensorView, ScalarType},
@@ -41,7 +41,7 @@ pub fn cuda_sort2(
     dim: usize,
     descending: bool,
     stream: CUstream,
-) -> candle_core::Result<(Tensor, Tensor)> {
+) -> candle::Result<(Tensor, Tensor)> {
     let mut default_creator = DefaultTensorCreator {};
     cuda_sort2_(t, dim, descending, &mut default_creator, stream)
 }
@@ -51,7 +51,7 @@ fn cuda_sort2_<F: TensorCreator>(
     descending: bool,
     tensor_creator: &mut F,
     stream: CUstream,
-) -> candle_core::Result<(Tensor, Tensor)> {
+) -> candle::Result<(Tensor, Tensor)> {
     //let out = tensor_creator.new(t.shape(), t.dtype(), t.device(), false)?;
     let indices = tensor_creator.new(t.shape(), DType::U32, t.device(), false)?;
     let input_view = common::ffi::CTensorView::from(&t, false)?;
@@ -87,7 +87,7 @@ pub fn cuda_sort(
     dim: usize,
     descending: bool,
     stream: CUstream,
-) -> candle_core::Result<(Tensor, Tensor)> {
+) -> candle::Result<(Tensor, Tensor)> {
     let mut default_creator = DefaultTensorCreator {};
     cuda_sort_(t, dim, descending, &mut default_creator, stream)
 }
@@ -98,7 +98,7 @@ pub fn cuda_sort_<F: TensorCreator>(
     descending: bool,
     tensor_creator: &mut F,
     stream: CUstream,
-) -> candle_core::Result<(Tensor, Tensor)> {
+) -> candle::Result<(Tensor, Tensor)> {
     cuda_sort2_(t, dim, descending, tensor_creator, stream)
 
     // let out = tensor_creator.new(t.shape(), t.dtype(), t.device(), false)?;
@@ -125,7 +125,7 @@ pub fn cuda_sort_<F: TensorCreator>(
 }
 
 #[test]
-fn test_sort() -> candle_core::Result<()> {
+fn test_sort() -> candle::Result<()> {
     let device = Device::new_cuda(0)?;
     let a = Tensor::new(
         &[

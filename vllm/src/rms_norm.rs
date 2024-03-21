@@ -1,10 +1,8 @@
-use candle_core::cuda_backend::cudarc::driver::sys::CUstream;
-use candle_core::Module;
-use candle_core::{Device, Shape, Tensor};
+use candle::cuda_backend::cudarc::driver::sys::CUstream;
+use candle::{Device, Shape, Tensor};
 use common::cuda_ext::get_tensor_cuda_device_ptr;
-use common::ffi::{get_scalar_type, CShapeView, CTensorView, ScalarType};
+use common::ffi::{get_scalar_type, ScalarType};
 use common::{DefaultTensorCreator, TensorCreator};
-use libc::c_float;
 
 use std::os::raw::{c_uint, c_void};
 
@@ -19,9 +17,6 @@ pub struct RmsNormKernelParams {
 }
 
 extern "C" {
-    // void cuda_oneflow_rms_norm(CTensorView x, CTensorView weight, CShapeView normalized_shape, float epsilon,
-    //     cudaStream_t stream, CTensorView inv_rms, CTensorView y)
-
     fn vllm_fused_add_rms_norm(
         inout: *mut c_void,
         residual: *mut c_void,
@@ -44,24 +39,12 @@ pub struct RmsNorm {
 }
 
 impl RmsNorm {
-    // pub fn new<S: Into<Shape>>(s: S, eps: f64, elementwise_affine: bool) -> Self {
-    //     Self {
-    //         weight: None,
-    //         normalized_shape: s.into(),
-    //         eps,
-    //         elementwise_affine,
-    //     }
-    // }
-    pub fn load<S: Into<Shape>>(
-        s: S,
-        eps: f64,
-        vb: candle_nn::VarBuilder,
-    ) -> candle_core::Result<Self> {
+    pub fn load<S: Into<Shape>>(s: S, eps: f64, vb: candle_nn::VarBuilder) -> candle::Result<Self> {
         let normalized_shape = s.into();
-        let weight = vb.get_with_hints(
-            normalized_shape.clone(),
+        let weight = vb.get(
+            normalized_shape.dims(),
             "weight",
-            candle_nn::Init::Const(1.),
+            // candle_nn::Init::Const(1.),
         )?;
         Ok(Self {
             weight,
@@ -69,7 +52,7 @@ impl RmsNorm {
             eps,
         })
     }
-    pub fn forward_residual_(&self, xs: &Tensor, residual: &Tensor) -> candle_core::Result<()> {
+    pub fn forward_residual_(&self, xs: &Tensor, residual: &Tensor) -> candle::Result<()> {
         let hidden_size = *xs.dims().last().unwrap();
         let num_tokens = xs.elem_count() / hidden_size;
         let params = RmsNormKernelParams {
@@ -98,7 +81,7 @@ impl RmsNorm {
         xs: &Tensor,
         tensor_creator: &mut F,
         log_enable: bool,
-    ) -> candle_core::Result<Tensor> {
+    ) -> candle::Result<Tensor> {
         let hidden_size = *xs.dims().last().unwrap();
         let num_tokens = xs.elem_count() / hidden_size;
         let params = RmsNormKernelParams {
@@ -128,7 +111,7 @@ impl RmsNorm {
         }
         Ok(out)
     }
-    pub fn forward(&self, xs: &Tensor) -> candle_core::Result<Tensor> {
+    pub fn forward(&self, xs: &Tensor) -> candle::Result<Tensor> {
         let mut default_creator = DefaultTensorCreator {};
         self.forward_(xs, &mut default_creator, false)
     }

@@ -9,6 +9,7 @@ Shang and Dang, Xingyu and Han, Song}, journal={arXiv}, year={2023}
 
 // #include <c10/cuda/CUDAGuard.h>
 // #include <torch/extension.h>
+#include <cassert>
 #include <cstdint>
 
 #include "dequantize.cuh"
@@ -19,6 +20,7 @@ Shang and Dang, Xingyu and Han, Song}, journal={arXiv}, year={2023}
 namespace vllm {
 namespace awq {
 
+// Pack two half values.
 // Pack two half values.
 static inline __device__ __host__ unsigned __pack_half2(const half x,
                                                         const half y) {
@@ -495,14 +497,15 @@ struct AWQGemmParams {
   int scaling_factors_size;
 };
 
-void vllm_awq_gemm(void *kernel_data, void *scaling_factors_data,
-                   void *zero_data, void *in_feats_data, void *out_feats_data,
-                   cudaStream_t stream, AWQGemmParams params) {
+void vllm_awq_gemm(void *in_feats_data, void *kernel_data,
+                   void *scaling_factors_data, void *zero_data,
+                   void *out_feats_data, cudaStream_t stream,
+                   AWQGemmParams params) {
   int num_in_feats = params.num_in_feats;
   int num_in_channels = params.num_in_channels;
 
   int num_out_feats = params.num_out_feats;
-  int num_out_channels = params.num_in_channels;
+  int num_out_channels = params.num_out_channels;
 
   auto in_feats = reinterpret_cast<half *>(in_feats_data);
   auto kernel = reinterpret_cast<int *>(kernel_data);
@@ -511,6 +514,11 @@ void vllm_awq_gemm(void *kernel_data, void *scaling_factors_data,
   auto zeros = reinterpret_cast<int *>(zero_data);
   int group_size = num_in_channels / params.scaling_factors_size;
   int split_k_iters = params.split_k_iters;
+
+  // printf("###num_in_feats:%d,num_in_channels:%d,num_out_feats:%d,num_out_"
+  //        "channels:%d,scaling_factors_size:%d,split_k_iters:%d \n",
+  //        num_in_feats, num_in_channels, num_out_feats, num_out_channels,
+  //        split_k_iters, params.scaling_factors_size);
 
   if (num_out_channels % 64 != 0)
     throw std::invalid_argument("OC is not multiple of cta_N = 64");
@@ -521,7 +529,6 @@ void vllm_awq_gemm(void *kernel_data, void *scaling_factors_data,
   if (num_out_channels % group_size != 0)
     throw std::invalid_argument("OC is not multiple of Group size");
 
-  // const cudaStream_t stream = at::cuda::getCurrentCUDAStream();
   if (num_out_channels % 128 == 0) {
     int j_factors1 = num_out_channels / 128 / 1;
     dim3 num_blocks((num_out_feats + 16 - 1) / 16 * j_factors1 * split_k_iters);
@@ -548,124 +555,3 @@ void vllm_awq_gemm(void *kernel_data, void *scaling_factors_data,
   // return _out_feats.sum(0);
 }
 }
-
-// torch::Tensor awq_dequantize(torch::Tensor _kernel,
-//                              torch::Tensor _scaling_factors,
-//                              torch::Tensor _zeros, int split_k_iters, int
-//                              thx, int thy) {
-//   int in_c = _kernel.size(0);
-//   int qout_c = _kernel.size(1);
-//   int out_c = qout_c * 8;
-//   int G = in_c / _scaling_factors.size(0);
-
-//   int x_thread = thx;
-//   int y_thread = thy;
-
-//   int x_blocks = 1;
-//   int y_blocks = 1;
-//   if (thx == 0) {
-//     x_thread = qout_c;
-//   }
-//   if (thy == 0) {
-//     y_thread = in_c;
-//   }
-//   if (thx == 0 && thy == 0) {
-//     x_thread = 8;
-//     y_thread = 8;
-//     x_blocks = (int)(qout_c / 8);
-//     y_blocks = (int)(in_c / 8);
-//   }
-
-//   const at::cuda::OptionalCUDAGuard
-//   device_guard(device_of(_scaling_factors));
-
-//   auto options = torch::TensorOptions()
-//                      .dtype(_scaling_factors.dtype())
-//                      .device(_scaling_factors.device());
-//   at::Tensor _de_kernel = torch::empty({in_c, out_c}, options);
-
-//   auto kernel = reinterpret_cast<int *>(_kernel.data_ptr<int>());
-//   auto de_kernel = reinterpret_cast<half *>(_de_kernel.data_ptr<at::Half>());
-//   auto scaling_factors =
-//       reinterpret_cast<half *>(_scaling_factors.data_ptr<at::Half>());
-//   auto zeros = reinterpret_cast<int *>(_zeros.data_ptr<int>());
-
-//   dim3 num_blocks(x_blocks, y_blocks);
-//   dim3 threads_per_block(x_thread, y_thread);
-
-//   const cudaStream_t stream = at::cuda::getCurrentCUDAStream();
-//   vllm::awq::dequantize_weights<<<num_blocks, threads_per_block, 0,
-//   stream>>>(
-//       kernel, scaling_factors, zeros, de_kernel, G);
-
-//   return _de_kernel;
-// }
-
-// in_feats: M, IC [float16]
-// kernel: IC, OC // 8 [int32] -> cast to IC, OC [uint4b]
-// scaling_factors: IC // G, OC [float16]
-// zeros: IC // G, OC // 8 [int32] -> cast to IC // G, OC [uint4b]
-// assume that batch_size < 16 for now
-
-// torch::Tensor awq_gemm(torch::Tensor _in_feats, torch::Tensor _kernel,
-//                        torch::Tensor _scaling_factors, torch::Tensor _zeros,
-//                        int split_k_iters) {
-//   int num_in_feats = _in_feats.size(0);
-//   int num_in_channels = _in_feats.size(1);
-//   const at::cuda::OptionalCUDAGuard device_guard(device_of(_in_feats));
-
-//   auto options = torch::TensorOptions()
-//                      .dtype(_in_feats.dtype())
-//                      .device(_in_feats.device());
-//   at::Tensor _out_feats =
-//       torch::empty({split_k_iters, num_in_feats, _kernel.size(1) * 8},
-//       options);
-//   int num_out_feats = _out_feats.size(-2);
-//   int num_out_channels = _out_feats.size(-1);
-
-//   auto in_feats = reinterpret_cast<half *>(_in_feats.data_ptr<at::Half>());
-//   auto kernel = reinterpret_cast<int *>(_kernel.data_ptr<int>());
-//   auto out_feats = reinterpret_cast<half *>(_out_feats.data_ptr<at::Half>());
-//   auto scaling_factors =
-//       reinterpret_cast<half *>(_scaling_factors.data_ptr<at::Half>());
-//   auto zeros = reinterpret_cast<int *>(_zeros.data_ptr<int>());
-//   int group_size = num_in_channels / _scaling_factors.size(0);
-
-//   if (num_out_channels % 64 != 0)
-//     throw std::invalid_argument("OC is not multiple of cta_N = 64");
-//   if (num_out_channels % 8 != 0)
-//     throw std::invalid_argument("OC is not multiple of pack_num = 8");
-//   if (group_size % 32 != 0)
-//     throw std::invalid_argument("Group size should be a multiple of 32");
-//   if (num_out_channels % group_size != 0)
-//     throw std::invalid_argument("OC is not multiple of Group size");
-
-//   const cudaStream_t stream = at::cuda::getCurrentCUDAStream();
-//   if (num_out_channels % 128 == 0) {
-//     int j_factors1 = num_out_channels / 128 / 1;
-//     dim3 num_blocks((num_out_feats + 16 - 1) / 16 * j_factors1 *
-//     split_k_iters);
-//     // threadIdx.x: 32
-//     // threadIdx.y: i_factors[2] * j_factors[2]
-//     dim3 threads_per_block(32, 2);
-//     vllm::awq::gemm_forward_4bit_cuda_m16nXk32<128>
-//         <<<num_blocks, threads_per_block, 0, stream>>>(
-//             group_size, split_k_iters, in_feats, kernel, scaling_factors,
-//             zeros, num_in_feats, num_in_channels, num_out_channels,
-//             out_feats);
-//   } else if (num_out_channels % 64 == 0) {
-//     int j_factors1 = num_out_channels / 64 / 1;
-//     dim3 num_blocks(1 * (num_out_feats + 16 - 1) / 16 * j_factors1 *
-//                     split_k_iters);
-
-//     // threadIdx.x: 32
-//     // threadIdx.y: i_factors[2] * j_factors[2]
-//     dim3 threads_per_block(32, 2);
-//     vllm::awq::gemm_forward_4bit_cuda_m16nXk32<64>
-//         <<<num_blocks, threads_per_block, 0, stream>>>(
-//             group_size, split_k_iters, in_feats, kernel, scaling_factors,
-//             zeros, num_in_feats, num_in_channels, num_out_channels,
-//             out_feats);
-//   }
-//   return _out_feats.sum(0);
-// }

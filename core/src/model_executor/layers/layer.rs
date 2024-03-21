@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use candle_core::{DType, Tensor};
+use candle::{DType, Tensor};
 use candle_nn::VarBuilder;
 use common::{DefaultTensorCreator, TensorCreator};
 
@@ -24,9 +24,9 @@ pub trait Layer: Sized {
         &self,
         x: &Tensor,
         tensor_creator: &mut C,
-    ) -> candle_core::Result<Tensor>;
+    ) -> candle::Result<Tensor>;
 
-    fn forward(&self, x: &Tensor) -> candle_core::Result<Tensor> {
+    fn forward(&self, x: &Tensor) -> candle::Result<Tensor> {
         let mut default_creator = DefaultTensorCreator {};
         self.forward_(x, &mut default_creator)
     }

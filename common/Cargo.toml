@@ -7,7 +7,7 @@ edition = "2021"
 [dependencies]
 anyhow = { workspace = true }
 libc = { workspace = true }
-candle-core = { workspace = true }
+candle = { workspace = true }
 half = { workspace = true }
 tracing = { workspace = true }
 tracing-appender = { workspace = true }
@@ -27,4 +27,4 @@ num_cpus = "1.15.0"
 
 [features]
 default = ["cuda"]
-cuda = ["candle-core/cuda"]
+cuda = ["candle/cuda"]

@@ -18,7 +18,7 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 tracing-appender = { workspace = true }
 anyhow = { workspace = true }
-candle-core = { workspace = true }
+candle = { workspace = true }
 tokio = { workspace = true }
 
 
@@ -27,4 +27,4 @@ anyhow = { version = "1", features = ["backtrace"] }
 
 [features]
 default = ["cuda"]
-cuda = ["candle-core/cuda"]
+cuda = ["candle/cuda"]

@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
-use candle_core::{DType, Shape};
+use candle::{DType, Shape};
 
+#[derive(Debug)]
 pub struct WeightRegistry {
     pub(crate) name: &'static str,
     pub(crate) shape: Shape,

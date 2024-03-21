@@ -1,10 +1,10 @@
-use candle_core::cuda_backend::cudarc::driver::{DevicePtr, DeviceRepr, LaunchAsync};
-use candle_core::cuda_backend::WrapErr;
-use candle_core::{
+use candle::cuda_backend::cudarc::driver::{DevicePtr, DeviceRepr, LaunchAsync};
+use candle::cuda_backend::WrapErr;
+use candle::{
     backend::BackendStorage, cuda_backend::cudarc::driver::LaunchConfig, shape::Dim, CpuStorage,
     CudaStorage, DType, Layout, Shape, Storage,
 };
-use candle_core::{Device, Tensor};
+use candle::{Device, Tensor};
 use common::cuda_ext::get_tensor_cuda_device_ptr;
 
 use common::{DefaultTensorCreator, TensorCreator};
@@ -15,7 +15,7 @@ fn kernel_name(root: &str, lhs_dtype: DType, rhs_dtype: DType) -> String {
     format!("{root}_{lhs_dtype}_{rhs_dtype}")
 }
 
-fn cuda_binary_op(a: &Tensor, b: &Tensor, c: &Tensor, op: &str) -> candle_core::Result<()> {
+fn cuda_binary_op(a: &Tensor, b: &Tensor, c: &Tensor, op: &str) -> candle::Result<()> {
     let device = match a.device() {
         Device::Cuda(cuda_dev) => cuda_dev,
         _ => {
@@ -39,7 +39,7 @@ fn cuda_binary_op(a: &Tensor, b: &Tensor, c: &Tensor, op: &str) -> candle_core::
     Ok(())
 }
 
-pub fn cuda_tensor_mul(lhs: &Tensor, rhs: &Tensor, dtype: DType) -> candle_core::Result<Tensor> {
+pub fn cuda_tensor_mul(lhs: &Tensor, rhs: &Tensor, dtype: DType) -> candle::Result<Tensor> {
     let mut default_creator = DefaultTensorCreator {};
     cuda_tensor_mul_(lhs, rhs, dtype, &mut default_creator)
 }
@@ -49,7 +49,7 @@ pub fn cuda_tensor_mul_<F: TensorCreator>(
     rhs: &Tensor,
     dtype: DType,
     tensor_creator: &mut F,
-) -> candle_core::Result<Tensor> {
+) -> candle::Result<Tensor> {
     if lhs.dtype() == rhs.dtype() {
         return lhs.mul(rhs);
     }
@@ -62,7 +62,7 @@ pub fn cuda_tensor_broadcast_mul(
     lhs: &Tensor,
     rhs: &Tensor,
     dtype: DType,
-) -> candle_core::Result<Tensor> {
+) -> candle::Result<Tensor> {
     let mut default_creator = DefaultTensorCreator {};
     cuda_tensor_broadcast_mul_(lhs, rhs, dtype, &mut default_creator)
 }
@@ -72,7 +72,7 @@ pub fn cuda_tensor_broadcast_mul_<F: TensorCreator>(
     rhs: &Tensor,
     dtype: DType,
     tensor_creator: &mut F,
-) -> candle_core::Result<Tensor> {
+) -> candle::Result<Tensor> {
     if lhs.dtype() == rhs.dtype() {
         return lhs.broadcast_mul(rhs);
     }
@@ -83,7 +83,7 @@ pub fn cuda_tensor_broadcast_mul_<F: TensorCreator>(
 }
 
 #[test]
-fn test_mul() -> candle_core::Result<()> {
+fn test_mul() -> candle::Result<()> {
     let device = Device::new_cuda(0)?;
     let a = Tensor::new(&[2.0], &device)?.to_dtype(DType::F16)?;
     let b = Tensor::new(&[1_i64, 2, 3, 4, 5], &device)?;

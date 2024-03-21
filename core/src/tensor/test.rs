@@ -1,6 +1,6 @@
 use std::ops::Deref;
 
-use candle_core::{
+use candle::{
     cuda_backend::cudarc::driver::{
         result::{memcpy_dtod_async, memcpy_dtoh_async, memcpy_htod_async},
         CudaFunction, CudaSlice, CudaStream, DevicePtr, DeviceRepr, LaunchAsync, LaunchConfig,
@@ -9,7 +9,7 @@ use candle_core::{
 };
 
 struct ArgSort;
-impl candle_core::CustomOp1 for ArgSort {
+impl candle::CustomOp1 for ArgSort {
     fn name(&self) -> &'static str {
         "arg-sort"
     }
@@ -18,27 +18,27 @@ impl candle_core::CustomOp1 for ArgSort {
         &self,
         storage: &CpuStorage,
         layout: &Layout,
-    ) -> candle_core::Result<(CpuStorage, Shape)> {
+    ) -> candle::Result<(CpuStorage, Shape)> {
         if layout.shape().rank() != 1 {
-            candle_core::bail!(
+            candle::bail!(
                 "input should have a single dimension, got {:?}",
                 layout.shape()
             )
         }
         let slice = storage.as_slice::<f32>()?;
         let src = match layout.contiguous_offsets() {
-            None => candle_core::bail!("input has to be contiguous"),
+            None => candle::bail!("input has to be contiguous"),
             Some((o1, o2)) => &slice[o1..o2],
         };
         let mut dst = (0..src.len() as u32).collect::<Vec<u32>>();
         dst.sort_by(|&i, &j| src[i as usize].total_cmp(&src[j as usize]));
-        let storage = candle_core::WithDType::to_cpu_storage_owned(dst);
+        let storage = candle::WithDType::to_cpu_storage_owned(dst);
         Ok((storage, layout.shape().clone()))
     }
 }
 
 #[test]
-fn test_index0() -> candle_core::Result<()> {
+fn test_index0() -> candle::Result<()> {
     let a = Tensor::new(&[0.0f32, 1.0, 3.0, 2.0, -12.0, 4.0, 3.5, 8.0], &Device::Cpu)?;
     let v = a.i(3)?.to_scalar::<f32>()?;
     println!("v={}", v);
@@ -52,15 +52,13 @@ fn test_index0() -> candle_core::Result<()> {
 }
 
 #[test]
-fn test_sort() -> candle_core::Result<()> {
+fn test_sort() -> candle::Result<()> {
     let device = Device::new_cuda(0)?;
-    let (before_free, _) =
-        candle_core::cuda_backend::cudarc::driver::result::mem_get_info().unwrap();
+    let (before_free, _) = candle::cuda_backend::cudarc::driver::result::mem_get_info().unwrap();
     println!("before_free:{}", before_free);
     let a = Tensor::randn(0f32, 1., (1, 32000), &device)?.to_dtype(DType::F16)?;
     let v = a.cumsum(D::Minus1)?;
-    let (after_free, _) =
-        candle_core::cuda_backend::cudarc::driver::result::mem_get_info().unwrap();
+    let (after_free, _) = candle::cuda_backend::cudarc::driver::result::mem_get_info().unwrap();
     println!(
         "v shape:{:?}, cumsum use gpu mem:{}",
         v.shape(),
@@ -69,14 +67,13 @@ fn test_sort() -> candle_core::Result<()> {
     drop(a);
     drop(v);
 
-    let (after_drop, _) =
-        candle_core::cuda_backend::cudarc::driver::result::mem_get_info().unwrap();
+    let (after_drop, _) = candle::cuda_backend::cudarc::driver::result::mem_get_info().unwrap();
     println!("afrer drop all, use gpu mem:{}", before_free - after_drop,);
     Ok(())
 }
 
 #[test]
-fn test_cumsum() -> candle_core::Result<()> {
+fn test_cumsum() -> candle::Result<()> {
     let a = Tensor::new(&[0.0f32, 1.0, 3.0, 2.0, -12.0, 4.0, 3.5], &Device::Cpu)?;
 
     let indices = a.apply_op1(ArgSort)?;
@@ -87,7 +84,7 @@ fn test_cumsum() -> candle_core::Result<()> {
 }
 
 #[test]
-fn test_repeate() -> candle_core::Result<()> {
+fn test_repeate() -> candle::Result<()> {
     let a = Tensor::new(&[1.0], &Device::Cpu)?;
     let a = a.reshape((1, 1))?;
     let start = std::time::Instant::now();
@@ -115,7 +112,7 @@ fn test_repeate() -> candle_core::Result<()> {
 #[test]
 fn test_tesnor_dims() {
     let v = (0..100 as i64).collect::<Vec<_>>();
-    let dev = candle_core::Device::Cpu;
+    let dev = candle::Device::Cpu;
     let tensor = Tensor::from_vec(v, (2, 5, 10), &dev).unwrap();
     assert_eq!(2, tensor.shape().dims()[0]);
     assert_eq!(5, tensor.shape().dims()[1]);
@@ -125,34 +122,31 @@ fn test_tesnor_dims() {
 #[test]
 fn test_empty_tesnor() {
     let v: Vec<i64> = Vec::new();
-    let dev = candle_core::Device::Cpu;
+    let dev = candle::Device::Cpu;
     let tensor = Tensor::from_vec(v, (1, 0), &dev).unwrap();
     assert_eq!(1, tensor.shape().dims()[0]);
     assert_eq!(0, tensor.shape().dims()[1]);
 }
 
 #[test]
-fn test_tesnor_cat() -> candle_core::Result<()> {
+fn test_tesnor_cat() -> candle::Result<()> {
     let device = Device::new_cuda(0)?;
     let cuda_dev = match &device {
         Device::Cuda(c) => c,
         _ => {
-            candle_core::bail!("unexpected")
+            candle::bail!("unexpected")
         }
     };
-    let (before_free, _) =
-        candle_core::cuda_backend::cudarc::driver::result::mem_get_info().unwrap();
+    let (before_free, _) = candle::cuda_backend::cudarc::driver::result::mem_get_info().unwrap();
     println!("before_free:{}", before_free);
     let a = Tensor::zeros((32, 1024, 1024), DType::F32, &device)?;
     let b = Tensor::zeros((32, 1024, 1024), DType::F32, &device)?;
     cuda_dev.synchronize();
-    let (after_free, _) =
-        candle_core::cuda_backend::cudarc::driver::result::mem_get_info().unwrap();
+    let (after_free, _) = candle::cuda_backend::cudarc::driver::result::mem_get_info().unwrap();
     println!("Create 2 tensors use gpu mem:{}", before_free - after_free,);
     let c = Tensor::cat(&[&a, &b], 0)?;
     cuda_dev.synchronize();
-    let (after_free, _) =
-        candle_core::cuda_backend::cudarc::driver::result::mem_get_info().unwrap();
+    let (after_free, _) = candle::cuda_backend::cudarc::driver::result::mem_get_info().unwrap();
     println!(
         "After cat 2 tensors use gpu mem:{}",
         before_free - after_free,
@@ -160,8 +154,7 @@ fn test_tesnor_cat() -> candle_core::Result<()> {
     drop(a);
     drop(b);
     //cuda_dev.synchronize();
-    let (after_free, _) =
-        candle_core::cuda_backend::cudarc::driver::result::mem_get_info().unwrap();
+    let (after_free, _) = candle::cuda_backend::cudarc::driver::result::mem_get_info().unwrap();
     println!(
         "After drop 2 tensors use gpu mem:{}",
         before_free - after_free,
@@ -170,9 +163,9 @@ fn test_tesnor_cat() -> candle_core::Result<()> {
 }
 
 #[test]
-fn test_create_tesnor() -> candle_core::Result<()> {
+fn test_create_tesnor() -> candle::Result<()> {
     let v: Vec<f32> = vec![0.8, 0.9];
-    let dev = candle_core::Device::Cpu;
+    let dev = candle::Device::Cpu;
     let start = std::time::Instant::now();
     let tensor = Tensor::new(v, &dev).unwrap();
     println!(
@@ -190,7 +183,7 @@ fn test_create_tesnor() -> candle_core::Result<()> {
 }
 
 #[test]
-fn test_tensor_slice() -> candle_core::Result<()> {
+fn test_tensor_slice() -> candle::Result<()> {
     let cuda_dev = Device::new_cuda(0)?;
     let t = Tensor::ones((2, 1, 12288), DType::F32, &cuda_dev)?;
     let t1 = t.i((.., .., 0..4096))?;
@@ -215,7 +208,7 @@ fn test_tensor_slice() -> candle_core::Result<()> {
 
 #[test]
 fn test_tesnor_or() {
-    let dev = candle_core::Device::Cpu;
+    let dev = candle::Device::Cpu;
     let data = vec![1_i64, 2, 3, 4, 5, 6, 7, 8, 9];
     let t = Tensor::from_vec(data, (3, 3), &dev).unwrap();
     let t1 = t.eq(5_i64).unwrap();
@@ -240,14 +233,14 @@ fn test_tesnor_or() {
 
 #[test]
 fn test_tesnor_reshape() {
-    let dev = candle_core::Device::Cpu;
+    let dev = candle::Device::Cpu;
     let t = Tensor::zeros((1, 1, 4096), DType::I64, &dev).unwrap();
     let t1 = t.reshape(((), 32, 128)).unwrap();
     print!("{:?}", t1.shape());
 }
 
 #[test]
-fn test_sub1() -> candle_core::Result<()> {
+fn test_sub1() -> candle::Result<()> {
     let device = Device::new_cuda(0)?;
     let p = Tensor::rand(0_f32, 1_f32, (256, 1), &device)?.to_dtype(DType::F16)?;
     let p = Tensor::ones(1, DType::F16, &device)?.broadcast_sub(&p)?;
@@ -256,9 +249,9 @@ fn test_sub1() -> candle_core::Result<()> {
 }
 
 #[test]
-fn test_cuda_kernels_launc() -> candle_core::Result<()> {
-    let device = candle_core::Device::new_cuda(0).unwrap();
-    let cuda_device = if let candle_core::Device::Cuda(cuda_dev) = &device {
+fn test_cuda_kernels_launc() -> candle::Result<()> {
+    let device = candle::Device::new_cuda(0).unwrap();
+    let cuda_device = if let candle::Device::Cuda(cuda_dev) = &device {
         cuda_dev
     } else {
         unimplemented!("unreach");
@@ -289,8 +282,8 @@ fn test_cuda_kernels_launc() -> candle_core::Result<()> {
 }
 
 #[test]
-fn test_broadcast_sub() -> candle_core::Result<()> {
-    let device = candle_core::Device::new_cuda(0).unwrap();
+fn test_broadcast_sub() -> candle::Result<()> {
+    let device = candle::Device::new_cuda(0).unwrap();
     let top_k_mask = Tensor::new(32000_i64, &device)?;
     let k = Tensor::new(&[5_i64, 5], &device)?;
     let top_k_mask = top_k_mask.broadcast_sub(&k)?;
@@ -321,39 +314,84 @@ fn test_broadcast_sub() -> candle_core::Result<()> {
 }
 
 #[test]
-fn test_narrow() -> candle_core::Result<()> {
-    let device = candle_core::Device::new_cuda(0).unwrap();
+fn test_narrow() -> candle::Result<()> {
+    let device = candle::Device::new_cuda(0).unwrap();
     let cuda_dev = match &device {
         Device::Cuda(c) => c,
         _ => {
-            candle_core::bail!("unexpected!")
+            candle::bail!("unexpected!")
         }
     };
     cuda_dev.synchronize();
-    let (before_free, _) =
-        candle_core::cuda_backend::cudarc::driver::result::mem_get_info().unwrap();
+    let (before_free, _) = candle::cuda_backend::cudarc::driver::result::mem_get_info().unwrap();
     println!("init gpu free:{} KB", before_free / 1024);
     let test = Tensor::rand(1_f32, 10.0, (4096, 4096), &device)?;
     cuda_dev.synchronize();
-    let (before_free, _) =
-        candle_core::cuda_backend::cudarc::driver::result::mem_get_info().unwrap();
+    let (before_free, _) = candle::cuda_backend::cudarc::driver::result::mem_get_info().unwrap();
     println!("1 gpu free:{} KB", before_free / 1024);
     let test1 = test.narrow(0, 0, 4096)?;
     cuda_dev.synchronize();
-    let (before_free, _) =
-        candle_core::cuda_backend::cudarc::driver::result::mem_get_info().unwrap();
+    let (before_free, _) = candle::cuda_backend::cudarc::driver::result::mem_get_info().unwrap();
     println!("2 gpu free:{} KB", before_free / 1024);
 
     drop(test);
     cuda_dev.synchronize();
-    let (before_free, _) =
-        candle_core::cuda_backend::cudarc::driver::result::mem_get_info().unwrap();
+    let (before_free, _) = candle::cuda_backend::cudarc::driver::result::mem_get_info().unwrap();
     println!("free 1 gpu free:{} KB", before_free / 1024);
     drop(test1);
     cuda_dev.synchronize();
-    let (before_free, _) =
-        candle_core::cuda_backend::cudarc::driver::result::mem_get_info().unwrap();
+    let (before_free, _) = candle::cuda_backend::cudarc::driver::result::mem_get_info().unwrap();
     println!("free 2 gpu free:{} KB", before_free / 1024);
+
+    Ok(())
+}
+
+#[test]
+fn test_varbb() -> candle::Result<()> {
+    let device = candle::Device::new_cuda(0).unwrap();
+
+    let model_weight_files = vec!["./model.safetensors"];
+    let vb = unsafe {
+        candle_nn::VarBuilder::from_mmaped_safetensors(&model_weight_files, DType::F16, &device)?
+    };
+    let test_tensor0 = vb.pp("model.layers.1.self_attn.q_proj");
+    let test_tensor0 = test_tensor0.get(((5120_usize, 640_usize)), "qweight")?; // failed to get tensor with wrong dtype
+    println!("{:?}", test_tensor0.dtype());
+
+    let test_tensor1 = vb.pp("model.layers.0.input_layernorm");
+    let test_tensor1 = test_tensor1.get(5120_usize, "weight")?;
+    println!("{:?}", test_tensor1.dtype());
+
+    Ok(())
+}
+
+#[test]
+fn test_safetensor() -> candle::Result<()> {
+    let device = candle::Device::new_cuda(0).unwrap();
+
+    let model_weight_files = vec!["/data2/models/Llama-2-13B-chat-AWQ/model.safetensors"];
+    let tensors = unsafe { candle::safetensors::MmapedSafetensors::new(model_weight_files[0])? };
+
+    let t0 = tensors.get("model.layers.1.self_attn.q_proj.qweight")?;
+    println!("{:?}/{:?}", t0.dtype(), t0.shape());
+
+    let t1 = tensors.get("model.layers.0.input_layernorm.weight")?;
+    println!("{:?}/{:?}", t1.dtype(), t1.shape());
+
+    Ok(())
+}
+
+#[test]
+fn test_cat() -> candle::Result<()> {
+    let a = Tensor::zeros((2, 3), DType::F32, &Device::Cpu)?;
+    let b = Tensor::zeros((2, 3), DType::F32, &Device::Cpu)?;
+
+    let c = Tensor::cat(&[&a, &b], 1)?;
+    println!("{}  {}/{}", c.to_string(), a.rank(), b.rank());
+
+    let block_size: usize = c.dims().iter().skip(1 + 1).product();
+
+    println!("{}  ", block_size);
 
     Ok(())
 }

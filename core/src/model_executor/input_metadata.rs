@@ -1,4 +1,4 @@
-use candle_core::Tensor;
+use candle::Tensor;
 
 use super::ops::AttentionBias;
 

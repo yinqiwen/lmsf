@@ -1,5 +1,5 @@
-use candle_core::cuda_backend::cudarc::driver::{DevicePtr, DeviceRepr};
-use candle_core::{cuda_backend::cudarc::driver::sys::CUstream, DType, Device, Tensor, D};
+use candle::cuda_backend::cudarc::driver::{DevicePtr, DeviceRepr};
+use candle::{cuda_backend::cudarc::driver::sys::CUstream, DType, Device, Tensor, D};
 use common::{
     cuda_ext::get_tensor_cuda_device_ptr, ffi::get_scalar_type, ffi::ScalarType,
     DefaultTensorCreator, TensorCreator,
@@ -16,6 +16,7 @@ pub struct AWQDequntizeParams {
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct AWQGemmParams {
     pub num_in_feats: i32,
     pub num_in_channels: i32,
@@ -36,14 +37,15 @@ extern "C" {
     );
 
     fn vllm_awq_gemm(
+        in_feats_data: *mut c_void,
         kernel_data: *mut c_void,
         scaling_factors_data: *mut c_void,
         zero_data: *mut c_void,
-        in_feats_data: *mut c_void,
         out_feats_data: *mut c_void,
         stream: CUstream,
         params: AWQGemmParams,
     );
+
 }
 
 pub fn awq_dequantize<F: TensorCreator>(
@@ -53,7 +55,7 @@ pub fn awq_dequantize<F: TensorCreator>(
     thx: i32,
     thy: i32,
     tensor_creator: &mut F,
-) -> candle_core::Result<Tensor> {
+) -> candle::Result<Tensor> {
     //   int in_c = _kernel.size(0);
     //   int qout_c = _kernel.size(1);
     let in_c = kernel.dims()[0] as i32;
@@ -66,6 +68,7 @@ pub fn awq_dequantize<F: TensorCreator>(
         thy,
         scaling_factors_size,
     };
+
     let out_c = kernel.dims()[0] * 8;
     let de_kernel = tensor_creator.new(
         (in_c as usize, out_c),
@@ -84,7 +87,7 @@ pub fn awq_dequantize<F: TensorCreator>(
             scaling_factors_data.as_ffi_ptr(),
             zeros_data.as_ffi_ptr(),
             de_kernel_data.as_ffi_ptr(),
-            std::ptr::null_mut(),
+            common::cuda_ext::cuda_get_default_stream(kernel.device())?,
             params,
         );
     }
@@ -98,7 +101,7 @@ pub fn awq_gemm<F: TensorCreator>(
     zeros: &Tensor,
     split_k_iters: i32,
     tensor_creator: &mut F,
-) -> candle_core::Result<Tensor> {
+) -> candle::Result<Tensor> {
     let num_in_feats = in_feats.dims()[0];
     let num_in_channels = in_feats.dims()[1];
     let out_feats_last_dim = kernel.dims()[1] * 8;
@@ -130,14 +133,15 @@ pub fn awq_gemm<F: TensorCreator>(
     let out_feats_data = get_tensor_cuda_device_ptr(&out_feats)?;
     unsafe {
         vllm_awq_gemm(
+            in_feats_data.as_ffi_ptr(),
             kernel_data.as_ffi_ptr(),
             scaling_factors_data.as_ffi_ptr(),
             zeros_data.as_ffi_ptr(),
-            in_feats_data.as_ffi_ptr(),
             out_feats_data.as_ffi_ptr(),
-            std::ptr::null_mut(),
+            common::cuda_ext::cuda_get_default_stream(kernel.device())?,
             params,
         );
     }
+
     out_feats.sum(0)
 }

@@ -1,6 +1,6 @@
-use candle_core::cuda_backend::cudarc::driver::sys::CUstream;
-use candle_core::Module;
-use candle_core::{Device, Shape, Tensor};
+use candle::cuda_backend::cudarc::driver::sys::CUstream;
+use candle::Module;
+use candle::{Device, Shape, Tensor};
 use common::ffi::{CShapeView, CTensorView};
 use common::{DefaultTensorCreator, TensorCreator};
 use libc::c_float;
@@ -17,7 +17,7 @@ extern "C" {
     );
 }
 
-pub fn cuda_silu_activation(a: &Tensor, b: &Tensor, stream: CUstream) -> candle_core::Result<()> {
+pub fn cuda_silu_activation(a: &Tensor, b: &Tensor, stream: CUstream) -> candle::Result<()> {
     let (bsize, num_token, inter_size) = a.dims3()?;
     let a_view = common::ffi::CTensorView::from(a, false)?;
     let b_view = common::ffi::CTensorView::from(b, false)?;

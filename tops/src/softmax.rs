@@ -1,5 +1,5 @@
-use candle_core::cuda_backend::cudarc::driver::sys::CUstream;
-use candle_core::{shape::Dim, CpuStorage, CudaStorage, DType, Device, Layout, Shape, Tensor};
+use candle::cuda_backend::cudarc::driver::sys::CUstream;
+use candle::{shape::Dim, CpuStorage, CudaStorage, DType, Device, Layout, Shape, Tensor};
 use common::{
     ffi::get_scalar_type,
     ffi::{CTensorView, ScalarType},
@@ -15,11 +15,7 @@ extern "C" {
     fn cuda_softmax_tensor(input: CTensorView, algo: c_int, stream: CUstream, output: CTensorView);
 }
 
-pub fn cuda_softmax<D: Dim>(
-    intput: &Tensor,
-    dim: D,
-    stream: CUstream,
-) -> candle_core::Result<Tensor> {
+pub fn cuda_softmax<D: Dim>(intput: &Tensor, dim: D, stream: CUstream) -> candle::Result<Tensor> {
     let mut default_creator = DefaultTensorCreator {};
     cuda_softmax_(intput, dim, &mut default_creator, stream)
 }
@@ -28,7 +24,7 @@ pub fn cuda_softmax_<F: TensorCreator, D: Dim>(
     dim: D,
     tensor_creator: &mut F,
     stream: CUstream,
-) -> candle_core::Result<Tensor> {
+) -> candle::Result<Tensor> {
     let out = tensor_creator.new(input.shape(), input.dtype(), input.device(), false)?;
 
     let input_view = common::ffi::CTensorView::from(input, false)?;
@@ -44,7 +40,7 @@ pub fn cuda_log_softmax<D: Dim>(
     intput: &Tensor,
     dim: D,
     stream: CUstream,
-) -> candle_core::Result<Tensor> {
+) -> candle::Result<Tensor> {
     let mut default_creator = DefaultTensorCreator {};
     cuda_log_softmax_(intput, dim, &mut default_creator, stream)
 }
@@ -53,7 +49,7 @@ pub fn cuda_log_softmax_<F: TensorCreator, D: Dim>(
     dim: D,
     tensor_creator: &mut F,
     stream: CUstream,
-) -> candle_core::Result<Tensor> {
+) -> candle::Result<Tensor> {
     let out = tensor_creator.new(input.shape(), input.dtype(), input.device(), false)?;
 
     let input_view = common::ffi::CTensorView::from(input, false)?;

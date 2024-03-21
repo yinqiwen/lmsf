@@ -1,9 +1,9 @@
 use std::{collections::HashMap, ops::Deref};
 
 use anyhow::{anyhow, Result};
-use candle_core::cuda_backend::cudarc::driver::DevicePtr;
-use candle_core::Storage;
-use candle_core::{
+use candle::cuda_backend::cudarc::driver::DevicePtr;
+use candle::Storage;
+use candle::{
     cuda_backend::cudarc::driver::{
         result::{memcpy_dtod_async, memcpy_dtoh_async, memcpy_htod_async},
         CudaFunction, CudaStream, DeviceRepr, LaunchAsync, LaunchConfig,
@@ -21,7 +21,7 @@ pub struct CacheOps {
 }
 
 impl CacheOps {
-    pub fn new(device: &CudaDevice) -> candle_core::Result<Self> {
+    pub fn new(device: &CudaDevice) -> candle::Result<Self> {
         Ok(Self {
             copy_blocks: vec![
                 device.get_or_load_func("copy_blocks_f16", kernels::CACHE_KERNELS)?,

@@ -5,6 +5,7 @@ mod cmp;
 mod copy;
 mod fill;
 mod scatter;
+
 #[cfg(test)]
 mod test;
 // pub mod tensor_cache;
@@ -16,5 +17,6 @@ pub use binary::{
     cuda_tensor_broadcast_mul_, cuda_tensor_mul, cuda_tensor_mul_,
 };
 pub use cmp::cuda_gt_;
+pub use copy::cuda_copy;
 pub use fill::cuda_tensor_ones;
 pub use scatter::cuda_scatter_add;

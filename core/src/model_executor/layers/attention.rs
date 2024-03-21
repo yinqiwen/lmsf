@@ -1,4 +1,4 @@
-use candle_core::{DType, Device, Tensor, D};
+use candle::{DType, Device, Tensor, D};
 
 use crate::model_executor::input_metadata::InputMetadata;
 use common::{DefaultTensorCreator, TensorCreator};
@@ -17,11 +17,11 @@ fn flash_attn(
 }
 
 #[cfg(not(feature = "flash-attn"))]
-fn flash_attn(_: &Tensor, _: &Tensor, _: &Tensor, _: f32, _: bool) -> candle_core::Result<Tensor> {
+fn flash_attn(_: &Tensor, _: &Tensor, _: &Tensor, _: f32, _: bool) -> candle::Result<Tensor> {
     unimplemented!("compile with '--features flash-attn'")
 }
 
-fn masked_fill(on_false: &Tensor, mask: &Tensor, on_true: f32) -> candle_core::Result<Tensor> {
+fn masked_fill(on_false: &Tensor, mask: &Tensor, on_true: f32) -> candle::Result<Tensor> {
     let shape = mask.shape();
     let on_true = Tensor::new(on_true, on_false.device())?.broadcast_as(shape.dims())?;
     let m = mask.where_cond(&on_true, on_false)?;
@@ -56,11 +56,11 @@ impl PagedAttention {
         num_key_value_heads: Option<usize>,
         sliding_window: Option<usize>,
         alibi_slopes: Option<Vec<f64>>,
-    ) -> candle_core::Result<Self> {
+    ) -> candle::Result<Self> {
         let cuda_device = if let Device::Cuda(cuda_dev) = &device {
             cuda_dev
         } else {
-            return Err(candle_core::bail!("no cuda device"));
+            return Err(candle::bail!("no cuda device"));
         };
         // let cache_ops = CacheOps::new(cuda_device)?;
         // let attention_ops = PagedAttentionOps::new(cuda_device)?;
@@ -89,7 +89,7 @@ impl PagedAttention {
         })
     }
 
-    fn repeat_kv(&self, x: Tensor) -> candle_core::Result<Tensor> {
+    fn repeat_kv(&self, x: Tensor) -> candle::Result<Tensor> {
         let n_rep = self.num_attention_heads / self.num_kv_heads;
         if n_rep == 1 {
             Ok(x)
@@ -112,7 +112,7 @@ impl PagedAttention {
         query: Tensor, //[batch_size*seq_len, num_attention_heads,  head_size]
         key: Tensor,   //[batch_size*seq_len, num_attention_heads,  head_size]
         value: Tensor, //[batch_size*seq_len, num_attention_heads,  head_size]
-    ) -> candle_core::Result<Tensor> {
+    ) -> candle::Result<Tensor> {
         let query = query
             .reshape((batch_size, seq_len, self.num_attention_heads, self.head_dim))?
             .transpose(1, 2)?;
@@ -170,7 +170,7 @@ impl PagedAttention {
         dtype: DType,
         log_enable: bool,
         tensor_creator: &mut F,
-    ) -> candle_core::Result<Tensor> {
+    ) -> candle::Result<Tensor> {
         if log_enable {
             // tracing::info!(
             //     "query:{}, key:{},value:{}:is_prompt:{}",
@@ -235,7 +235,7 @@ impl PagedAttention {
         input_metadata: &mut InputMetadata,
         log_enable: bool,
         tensor_creator: &mut F,
-    ) -> candle_core::Result<Tensor> {
+    ) -> candle::Result<Tensor> {
         let num_seqs = query.shape().dims()[0];
         let num_heads = query.shape().dims()[1];
         let max_context_len = input_metadata.max_context_len.unwrap();

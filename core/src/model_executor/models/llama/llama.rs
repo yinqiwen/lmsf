@@ -1,4 +1,4 @@
-use candle_core::{DType, Device, IndexOp, Result, Tensor, D};
+use candle::{DType, Device, IndexOp, Result, Tensor, D};
 use candle_nn::{Module, VarBuilder};
 // use candle_transformers::models::with_tracing::{linear_no_bias as linear, Linear};
 use serde::Deserialize;
@@ -164,31 +164,8 @@ impl<W: LinearWeights> CausalSelfAttention<W> {
         log_enable: bool,
     ) -> Result<Tensor> {
         let _enter = self.span.enter();
-        // let (b_sz, seq_len, hidden_size) = x.dims3()?;
-        // let mut q = self.q_proj.forward(x)?; //[batch_size, seq_len, num_heads * head_size]
-        // let mut k = self.k_proj.forward(x)?; //[batch_size, seq_len, num_heads * head_size]
-        // let v = self.v_proj.forward(x)?; //[batch_size, seq_len, num_heads * head_size]
-        //let debug_file = if log_enable { Some("test_qkv") } else { None };
-        // let (q, k, v) = self.qkv_proj.forward(x)?;
+
         let (q, k, v) = self.qkv_proj.forward(x)?;
-
-        // let mut q = q
-        //     .reshape((b_sz, seq_len, self.num_attention_heads, self.head_dim))?
-        //     .transpose(1, 2)?;
-
-        // let mut k = k
-        //     .reshape((b_sz, seq_len, self.num_key_value_heads, self.head_dim))?
-        //     .transpose(1, 2)?;
-
-        // let v = v
-        //     .reshape((b_sz, seq_len, self.num_key_value_heads, self.head_dim))?
-        //     .transpose(1, 2)?;
-
-        // if log_enable {
-        //     tracing::info!("before rotary_emb: query:{:?}/{:?}", q.shape(), q.stride());
-        // }
-
-        //rotary_emb accept shape [batch_size, seq_len, num_heads * head_size]
 
         self.rotary_emb.forward(positions, &q, &k)?;
 
@@ -219,8 +196,13 @@ impl<W: LinearWeights> CausalSelfAttention<W> {
         log_enable: bool,
     ) -> Result<Tensor> {
         let _enter = self.span.enter();
-
+        if log_enable {
+            // tracing::info!("before qkv_proj:{}", x.to_string());
+        }
         let (q, k, v) = self.qkv_proj.forward_(x, tensor_creator)?;
+        if log_enable {
+            // tracing::info!("after qkv_proj:{}", q.to_string());
+        }
 
         self.rotary_emb.forward(positions, &q, &k)?;
 
@@ -264,18 +246,14 @@ impl<W: LinearWeights> CausalSelfAttention<W> {
         cache: &Cache,
         cfg: &Config,
         parallel_state: &ParallelState,
+        config: W::Config,
     ) -> Result<Self> {
         let span = tracing::span!(tracing::Level::TRACE, "attn");
         let span_rot = tracing::span!(tracing::Level::TRACE, "attn-rot");
         let size_in = cfg.hidden_size;
         let size_q = (cfg.hidden_size / cfg.num_attention_heads) * cfg.num_attention_heads;
         let size_kv = (cfg.hidden_size / cfg.num_attention_heads) * cfg.num_key_value_heads;
-        // let q_proj = linear(size_in, size_q, vb.pp("q_proj"))?;
-        // let k_proj = linear(size_in, size_kv, vb.pp("k_proj"))?;
-        // let v_proj = linear(size_in, size_kv, vb.pp("v_proj"))?;
-        // let qkv_proj = QKVLinear::load_qkv(
-        //     &vb, size_in, size_q, "q_proj", size_kv, "k_proj", size_kv, "v_proj",
-        // )?;
+
         let head_size = cfg.hidden_size / cfg.num_attention_heads;
         let qkv_proj = QKVParallelLinear::<W>::load(
             &vb,
@@ -285,10 +263,17 @@ impl<W: LinearWeights> CausalSelfAttention<W> {
             Some(cfg.num_key_value_heads),
             &["q_proj", "k_proj", "v_proj"],
             parallel_state,
+            config.clone(),
         )?;
 
-        let o_proj =
-            ColumnParallelLinear::<W>::load(vb.pp("o_proj"), size_q, size_in, parallel_state)?;
+        let o_proj = ColumnParallelLinear::<W>::load(
+            vb.pp("o_proj"),
+            size_q,
+            size_in,
+            parallel_state,
+            config,
+        )?;
+
         // let o_proj =
         //     crate::model_executor::layers::linear_no_bias(size_q, size_in, vb.pp("o_proj"))?;
 
@@ -376,7 +361,12 @@ impl<W: LinearWeights> Mlp<W> {
         self.c_proj.forward(&x)
     }
 
-    fn load(vb: VarBuilder, cfg: &Config, parallel_state: &ParallelState) -> Result<Self> {
+    fn load(
+        vb: VarBuilder,
+        cfg: &Config,
+        parallel_state: &ParallelState,
+        config: W::Config,
+    ) -> Result<Self> {
         let span = tracing::span!(tracing::Level::TRACE, "mlp");
         let h_size = cfg.hidden_size;
         let i_size = cfg.intermediate_size;
@@ -386,9 +376,15 @@ impl<W: LinearWeights> Mlp<W> {
             &[i_size, i_size],
             &["gate_proj", "up_proj"],
             parallel_state,
+            config.clone(),
         )?;
-        let c_proj =
-            ColumnParallelLinear::<W>::load(vb.pp("down_proj"), i_size, h_size, parallel_state)?;
+        let c_proj = ColumnParallelLinear::<W>::load(
+            vb.pp("down_proj"),
+            i_size,
+            h_size,
+            parallel_state,
+            config,
+        )?;
         // let gate_up = crate::model_executor::layers::Linear::load_multi(
         //     &vb,
         //     h_size,
@@ -451,9 +447,9 @@ impl<W: LinearWeights> Block<W> {
                 (new_hidden_states, residual)
             }
         };
-        // if self.idx == 0 {
-        //     tracing::info!("before attn:{}", hidden_states.to_string());
-        // }
+        if self.idx == 0 {
+            // tracing::info!("before attn:{}", hidden_states.to_string());
+        }
 
         let hidden_states = self.attn.forward_(
             tensor_creator,
@@ -463,9 +459,9 @@ impl<W: LinearWeights> Block<W> {
             cache,
             self.idx == 0,
         )?;
-        // if self.idx == 0 {
-        //     tracing::info!("after attn:{}", hidden_states.to_string());
-        // }
+        if self.idx == 0 {
+            // tracing::info!("after attn:{}", hidden_states.to_string());
+        }
         self.rms_2.forward_residual_(&hidden_states, &residual)?;
 
         // let start = std::time::Instant::now();
@@ -514,17 +510,29 @@ impl<W: LinearWeights> Block<W> {
         cfg: &Config,
         idx: usize,
         parallel_state: &ParallelState,
+        config: W::Config,
     ) -> Result<Self> {
         let span = tracing::span!(tracing::Level::TRACE, "block");
-        let attn = CausalSelfAttention::<W>::load(vb.pp("self_attn"), cache, cfg, parallel_state)?;
-        let mlp = Mlp::<W>::load(vb.pp("mlp"), cfg, parallel_state)?;
+
+        let attn = CausalSelfAttention::<W>::load(
+            vb.pp("self_attn"),
+            cache,
+            cfg,
+            parallel_state,
+            config.clone(),
+        )?;
+
+        let mlp = Mlp::<W>::load(vb.pp("mlp"), cfg, parallel_state, config)?;
+
         let rms_1 =
             vllm::RmsNorm::load(cfg.hidden_size, cfg.rms_norm_eps, vb.pp("input_layernorm"))?;
+
         let rms_2 = vllm::RmsNorm::load(
             cfg.hidden_size,
             cfg.rms_norm_eps,
             vb.pp("post_attention_layernorm"),
         )?;
+
         Ok(Self {
             rms_1,
             attn,
@@ -566,6 +574,7 @@ impl<W: LinearWeights> Llama<W> {
 
         // cuda_dev.synchronize();
         // tracing::info!("wte cost {:?}", start.elapsed(),);
+        // tracing::info!("wte:{}", x.to_string());
         let mut residual: Option<Tensor> = None;
         let start = std::time::Instant::now();
 
@@ -640,12 +649,9 @@ impl<W: LinearWeights> Llama<W> {
             cfg.hidden_size,
             cfg.vocab_size,
             parallel_state,
+            None,
         )?;
-        // let lm_head = crate::model_executor::layers::linear_no_bias(
-        //     cfg.hidden_size,
-        //     cfg.vocab_size,
-        //     vb.pp("lm_head"),
-        // )?;
+
         let ln_f = vllm::RmsNorm::load(cfg.hidden_size, cfg.rms_norm_eps, vb.pp("model.norm"))?;
         let blocks: Vec<_> = (0..cfg.num_hidden_layers)
             .map(|i| {
@@ -655,6 +661,7 @@ impl<W: LinearWeights> Llama<W> {
                     cfg,
                     i,
                     parallel_state,
+                    linear_config.clone(),
                 )
                 .unwrap()
             })
@@ -677,7 +684,7 @@ impl<W: LinearWeights> Model for Llama<W> {
         input_positions: Tensor,
         kv_cache: Option<&Vec<(Tensor, Tensor)>>,
         mut input_metadata: InputMetadata,
-    ) -> anyhow::Result<candle_core::Tensor> {
+    ) -> anyhow::Result<Tensor> {
         self.do_forward(
             &input_tokens,
             &input_positions,

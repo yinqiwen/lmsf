@@ -1,10 +1,10 @@
-use candle_core::cuda_backend::cudarc::driver::{DevicePtr, DeviceRepr, LaunchAsync};
-use candle_core::cuda_backend::WrapErr;
-use candle_core::{
+use candle::cuda_backend::cudarc::driver::{DevicePtr, DeviceRepr, LaunchAsync};
+use candle::cuda_backend::WrapErr;
+use candle::{
     backend::BackendStorage, cuda_backend::cudarc::driver::LaunchConfig, shape::Dim, CpuStorage,
     CudaStorage, DType, Layout, Shape, Storage,
 };
-use candle_core::{
+use candle::{
     scalar::{TensorOrScalar, TensorScalar},
     Device, Tensor,
 };
@@ -32,9 +32,9 @@ fn cuda_cmp<T: TensorOrScalar>(
     rhs: T,
     op: CmpOp,
     dst: &Tensor,
-) -> candle_core::Result<()> {
+) -> candle::Result<()> {
     if dst.dtype() != DType::U8 {
-        return Err(candle_core::Error::UnexpectedDType {
+        return Err(candle::Error::UnexpectedDType {
             msg: "invalid dtype",
             expected: DType::U8,
             got: dst.dtype(),
@@ -42,7 +42,7 @@ fn cuda_cmp<T: TensorOrScalar>(
         .bt())?;
     }
     if dst.shape() != lhs.shape() {
-        return Err(candle_core::Error::ShapeMismatchBinaryOp {
+        return Err(candle::Error::ShapeMismatchBinaryOp {
             op: "cuda_cmp (lhs,rhs,dst)",
             lhs: lhs.shape().clone(),
             rhs: dst.shape().clone(),
@@ -52,7 +52,7 @@ fn cuda_cmp<T: TensorOrScalar>(
     let device = match lhs.device() {
         Device::Cuda(cuda_dev) => cuda_dev,
         _ => {
-            candle_core::bail!("unexpected device")
+            candle::bail!("unexpected device")
         }
     };
     let rhs = match rhs.to_tensor_scalar()? {
@@ -100,7 +100,7 @@ pub fn cuda_gt_<T: TensorOrScalar, F: TensorCreator>(
     lhs: &Tensor,
     rhs: T,
     tensor_creator: &mut F,
-) -> candle_core::Result<Tensor> {
+) -> candle::Result<Tensor> {
     let dst = tensor_creator.new(lhs.shape(), DType::U8, lhs.device(), false)?;
     cuda_cmp(lhs, rhs, CmpOp::Gt, &dst)?;
     Ok(dst)

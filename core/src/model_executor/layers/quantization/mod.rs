@@ -1,6 +1,7 @@
-use candle_core::DType;
+use candle::DType;
 
 mod awq;
+mod squeezellm;
 pub trait QuantizationConfig: Sized {
     fn get_name() -> &'static str;
     fn get_supported_act_dtypes() -> Vec<DType>;
@@ -8,9 +9,9 @@ pub trait QuantizationConfig: Sized {
     fn get_min_capability() -> u32;
     fn get_scaled_act_names() -> Vec<&'static str>;
 
-    fn from_json(value: serde_json::Value) -> candle_core::Result<Self>;
+    fn from_json(value: serde_json::Value) -> candle::Result<Self>;
 
-    fn load(dir: &str) -> candle_core::Result<Self> {
+    fn load(dir: &str) -> candle::Result<Self> {
         for config_file in Self::get_config_filenames() {
             let config_path = format!("{}/{}", dir, config_file);
             let path = std::path::Path::new(config_path.as_str());
@@ -18,12 +19,12 @@ pub trait QuantizationConfig: Sized {
                 continue;
             }
             let config_data =
-                std::fs::read_to_string(config_path).map_err(|e| candle_core::Error::msg(e))?;
+                std::fs::read_to_string(config_path).map_err(|e| candle::Error::msg(e))?;
             let cfg_value: serde_json::Value =
-                serde_json::from_str(&config_data).map_err(|e| candle_core::Error::msg(e))?;
+                serde_json::from_str(&config_data).map_err(|e| candle::Error::msg(e))?;
             return Self::from_json(cfg_value);
         }
-        candle_core::bail!("no valid config found")
+        candle::bail!("no valid config found")
     }
 }
 

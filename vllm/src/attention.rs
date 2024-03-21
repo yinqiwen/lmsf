@@ -1,4 +1,4 @@
-use candle_core::{DType, Tensor};
+use candle::{DType, Tensor};
 use libc::c_void;
 
 use common::{
@@ -48,7 +48,7 @@ pub fn apply_paged_attention_v1(
     block_tables: &Tensor,
     context_lens: &Tensor,
     alibi_slopes: Option<&Tensor>,
-) -> candle_core::Result<Tensor> {
+) -> candle::Result<Tensor> {
     let mut default_creator = DefaultTensorCreator {};
     apply_paged_attention_v1_(
         scale,
@@ -76,7 +76,7 @@ pub fn apply_paged_attention_v1_<F: TensorCreator>(
     context_lens: &Tensor,
     alibi_slopes: Option<&Tensor>,
     tensor_creator: &mut F,
-) -> candle_core::Result<Tensor> {
+) -> candle::Result<Tensor> {
     //let output = query.zeros_like()?;
     let output = tensor_creator.new(query.shape(), query.dtype(), query.device(), false)?;
     let block_size = value_cache.shape().dims()[3] as i32;
@@ -174,7 +174,7 @@ pub fn apply_paged_attention_v2(
     block_tables: &Tensor,
     context_lens: &Tensor,
     alibi_slopes: Option<&Tensor>,
-) -> candle_core::Result<Tensor> {
+) -> candle::Result<Tensor> {
     // let output = query.zeros_like()?;
     // let num_seqs = query.shape().dims()[0];
     // let num_heads = query.shape().dims()[1];
@@ -271,7 +271,7 @@ pub fn apply_paged_attention_v2_<F: TensorCreator>(
     context_lens: &Tensor,
     alibi_slopes: Option<&Tensor>,
     tensor_creator: &mut F,
-) -> candle_core::Result<Tensor> {
+) -> candle::Result<Tensor> {
     // let output = query.zeros_like()?;
     let output = tensor_creator.new(query.shape(), query.dtype(), query.device(), false)?;
     let num_seqs = query.shape().dims()[0];

@@ -1,7 +1,7 @@
 use std::ops::Deref;
 
 use anyhow::Result;
-use candle_core::{
+use candle::{
     cuda_backend::cudarc::driver::{CudaSlice, DevicePtr},
     Storage, Tensor,
 };

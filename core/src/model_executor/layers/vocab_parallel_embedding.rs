@@ -1,5 +1,5 @@
 //! Embedding Layer.
-use candle_core::{Result, Tensor};
+use candle::{Result, Tensor};
 
 #[derive(Clone, Debug)]
 pub struct Embedding {

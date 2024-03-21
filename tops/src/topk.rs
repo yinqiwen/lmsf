@@ -1,5 +1,5 @@
-use candle_core::cuda_backend::cudarc::driver::sys::CUstream;
-use candle_core::{shape::Dim, DType, Device, Shape, Tensor, D};
+use candle::cuda_backend::cudarc::driver::sys::CUstream;
+use candle::{shape::Dim, DType, Device, Shape, Tensor, D};
 use common::ffi::{CTensorView, ScalarType};
 use common::{DefaultTensorCreator, TensorCreator};
 use libc::{c_int, c_uint, c_void};
@@ -37,7 +37,7 @@ pub fn cuda_topk(
     topk: usize,
     dim: usize,
     stream: CUstream,
-) -> candle_core::Result<(Tensor, Tensor)> {
+) -> candle::Result<(Tensor, Tensor)> {
     // let dim = get_column_major_dim(t.shape(), dim)?;
 
     // let mut indices_dims = Vec::from(t.dims());
@@ -63,7 +63,7 @@ pub fn cuda_topk(
     cuda_topk2(t, topk, dim)
 }
 
-pub fn cuda_topk2<D: Dim>(t: &Tensor, k: usize, dim: D) -> candle_core::Result<(Tensor, Tensor)> {
+pub fn cuda_topk2<D: Dim>(t: &Tensor, k: usize, dim: D) -> candle::Result<(Tensor, Tensor)> {
     let mut default_creator = DefaultTensorCreator {};
     cuda_topk2_(t, k, dim, &mut default_creator, std::ptr::null_mut())
 }
@@ -74,7 +74,7 @@ pub fn cuda_topk2_<F: TensorCreator, D: Dim>(
     dim: D,
     tensor_creator: &mut F,
     stream: CUstream,
-) -> candle_core::Result<(Tensor, Tensor)> {
+) -> candle::Result<(Tensor, Tensor)> {
     let dim = if t.dims().len() == 1 {
         0
     } else {
@@ -141,7 +141,7 @@ pub fn cuda_topk2_<F: TensorCreator, D: Dim>(
     //   }
 }
 #[test]
-fn test_topk() -> candle_core::Result<()> {
+fn test_topk() -> candle::Result<()> {
     let device = Device::new_cuda(0)?;
     let test = Tensor::rand(1_f32, 10.0, (2, 10), &device)?;
     println!("{}", test.to_string());

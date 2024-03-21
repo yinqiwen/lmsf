@@ -4,7 +4,7 @@ use std::{
     sync::Arc,
 };
 
-use candle_core::{DType, Device, IndexOp, Tensor, D};
+use candle::{DType, Device, IndexOp, Tensor, D};
 use clap::ArgAction;
 use common::TensorCreator;
 
@@ -31,7 +31,7 @@ fn get_bin_counts_and_mask(
     mut tokens: Tensor,
     vocab_size: usize,
     num_seqs: usize,
-) -> candle_core::Result<(Tensor, Tensor)> {
+) -> candle::Result<(Tensor, Tensor)> {
     //let bin_counts = Tensor::zeros((num_seqs, vocab_size + 1), DType::I64, tokens.device())?;
     let bin_counts = cache.get(DType::I64, (num_seqs, vocab_size + 1), true)?;
 
@@ -56,7 +56,7 @@ fn apply_penalties(
     presence_penalties: Tensor,
     frequency_penalties: Tensor,
     repetition_penalties: Tensor,
-) -> candle_core::Result<Tensor> {
+) -> candle::Result<Tensor> {
     let start = std::time::Instant::now();
     let (num_seqs, vocab_size) = logits.shape().dims2()?;
     let (_, prompt_mask) =
@@ -144,12 +144,12 @@ fn apply_top_k_top_p(
     logits: Tensor,
     p: Tensor,
     k: Tensor,
-) -> candle_core::Result<Tensor> {
+) -> candle::Result<Tensor> {
     let start = std::time::Instant::now();
     let cuda_dev = match logits.device() {
         Device::Cuda(cuda) => cuda.clone(),
         _ => {
-            candle_core::bail!("")
+            candle::bail!("")
         }
     };
     cuda_dev.synchronize();
@@ -215,7 +215,7 @@ fn apply_top_p_top_k(
     logits: Tensor,
     p: Tensor,
     k: Tensor,
-) -> candle_core::Result<Tensor> {
+) -> candle::Result<Tensor> {
     let dim = logits.shape().dims().len() - 1;
     let start = std::time::Instant::now();
 
@@ -303,11 +303,7 @@ fn apply_top_p_top_k(
 //     Ok(m)
 // }
 
-fn apply_min_p(
-    arena: &mut TensorArena,
-    logits: Tensor,
-    min_p: Tensor,
-) -> candle_core::Result<Tensor> {
+fn apply_min_p(arena: &mut TensorArena, logits: Tensor, min_p: Tensor) -> candle::Result<Tensor> {
     // let probs = candle_nn::ops::softmax(&logits, D::Minus1)?;
     let probs = tops::cuda_softmax_(&logits, D::Minus1, arena, std::ptr::null_mut())?;
     let top_probs = probs.max_keepdim(D::Minus1)?;
@@ -328,7 +324,7 @@ fn apply_min_p(
 
     // return logits
 }
-fn multinomial(mut probs: Tensor, num_samples: usize) -> candle_core::Result<Tensor> {
+fn multinomial(mut probs: Tensor, num_samples: usize) -> candle::Result<Tensor> {
     // tracing::info!(
     //     "multinomial enter probs:{:?}, num_samples:{}",
     //     probs.to_string(),
@@ -368,7 +364,7 @@ fn multinomial(mut probs: Tensor, num_samples: usize) -> candle_core::Result<Ten
 fn greedy_sample(
     selected_seq_groups: &Vec<&(Vec<u64>, Arc<SamplingParams>)>,
     samples: &Tensor,
-) -> candle_core::Result<Vec<(Vec<u32>, Vec<u32>)>> {
+) -> candle::Result<Vec<(Vec<u32>, Vec<u32>)>> {
     let samples = samples.to_vec2::<u32>()?;
     let mut sample_idx: u32 = 0;
     let mut results = Vec::new();
@@ -392,7 +388,7 @@ fn random_sample(
     selected_seq_groups: &Vec<&(Vec<u64>, Arc<SamplingParams>)>,
     is_prompts: &Vec<bool>,
     random_samples: &Tensor,
-) -> candle_core::Result<Vec<(Vec<u32>, Vec<u32>)>> {
+) -> candle::Result<Vec<(Vec<u32>, Vec<u32>)>> {
     // force sync from gpu to cpu
     let cpu_device = Device::Cpu;
     let random_samples = random_samples.to_device(&cpu_device)?;
@@ -427,7 +423,7 @@ fn beam_search_sample(
     is_prompts: &Vec<bool>,
     seq_data: &HashMap<u64, SequenceDataRef>,
     logprobs: &Tensor,
-) -> candle_core::Result<Vec<(Vec<u32>, Vec<u32>)>> {
+) -> candle::Result<Vec<(Vec<u32>, Vec<u32>)>> {
     let mut sample_idx: usize = 0;
     let mut results = Vec::new();
     for ((seq_ids, sampling_params), is_prompt) in selected_seq_groups.iter().zip(is_prompts.iter())
@@ -499,7 +495,7 @@ fn sample(
     probs: Tensor,
     logprobs: &Tensor,
     sampling_metadata: &SamplingMetadata,
-) -> candle_core::Result<Vec<(Vec<u32>, Vec<u32>)>> {
+) -> candle::Result<Vec<(Vec<u32>, Vec<u32>)>> {
     let start = std::time::Instant::now();
 
     let mut categorized_seq_group_ids: Vec<Vec<usize>> = Vec::new();
@@ -570,7 +566,7 @@ fn sample(
                     beam_search_logprobs = Some(tmp);
                 }
                 _ => {
-                    candle_core::bail!("not supported sample type:{:?}", sample_type);
+                    candle::bail!("not supported sample type:{:?}", sample_type);
                 }
             }
         }
@@ -602,7 +598,7 @@ fn sample(
                     beam_search_logprobs.as_ref().unwrap(),
                 )?,
                 _ => {
-                    candle_core::bail!("not supported sample type:{:?}", sample_type);
+                    candle::bail!("not supported sample type:{:?}", sample_type);
                 }
             };
 
@@ -625,7 +621,7 @@ fn get_logprobs(
     logprobs: Tensor,
     sampling_metadata: &SamplingMetadata,
     sample_results: &Vec<(Vec<u32>, Vec<u32>)>,
-) -> candle_core::Result<(Vec<Option<PromptLogprobs>>, Vec<SampleLogprobs>)> {
+) -> candle::Result<(Vec<Option<PromptLogprobs>>, Vec<SampleLogprobs>)> {
     let mut batched_logprobs_query_seq_indices: Vec<u32> = Vec::new();
     let mut batched_logprobs_query_token_indices: Vec<u32> = Vec::new();
     let mut largest_num_logprobs = 0_u32;
@@ -801,7 +797,7 @@ fn build_sampler_output(
     sampling_metadata: SamplingMetadata,
     prompt_logprobs: Vec<Option<PromptLogprobs>>,
     sample_logprobs: Vec<SampleLogprobs>,
-) -> candle_core::Result<SamplerOutput> {
+) -> candle::Result<SamplerOutput> {
     let mut sampler_output: SamplerOutput = Vec::new();
     for (seq_group, sample_result, group_prompt_logprobs, group_sample_logprobs) in
         sampling_metadata
@@ -846,7 +842,7 @@ impl Sampler {
         max_model_len: usize,
         dtype: DType,
         device: &Device,
-    ) -> candle_core::Result<Self> {
+    ) -> candle::Result<Self> {
         Ok(Self {
             // base_tensor_buffer,
             // cache,
@@ -858,7 +854,7 @@ impl Sampler {
         &mut self,
         mut logits: Tensor,
         sampling_metadata: SamplingMetadata,
-    ) -> candle_core::Result<Option<SamplerOutput>> {
+    ) -> candle::Result<Option<SamplerOutput>> {
         // tracing::info!("####sample logits:{}", logits.to_string());
         // self.cache.reset();
         self.arena.reset();

@@ -1,13 +1,13 @@
-#include <torch/all.h>
-#include <torch/python.h>
+// #include <torch/all.h>
+// #include <torch/python.h>
 #include <cuda.h>
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>
 
 // half-tensor
-#include <c10/cuda/CUDAStream.h>
-#include <ATen/cuda/CUDATensorMethods.cuh>
-#include <c10/cuda/CUDAGuard.h>
+// #include <c10/cuda/CUDAStream.h>
+// #include <ATen/cuda/CUDATensorMethods.cuh>
+// #include <c10/cuda/CUDAGuard.h>
 
 #define BLOCKWIDTH 128
 #define BLOCKHEIGHT4 16
@@ -182,44 +182,91 @@ __global__ void NUQ4MatMulKernel(
 } // namespace squeezellm
 } // namespace vllm
 
+extern "C" {
+struct SqueezeLLMParams {
+  int height;
+  int width;
+  int batch;
+  int vec_height;
+};
 // 4-bit matvec kernel (LUT-based)
-void squeezellm_gemm(
-  torch::Tensor vec,
-  torch::Tensor mat,
-  torch::Tensor mul,
-  torch::Tensor lookup_table
-) {
-  int height = mat.size(0);
-  int width = mat.size(1);
+void vllm_squeezellm_gemm(void *vec, void *mat,
+                         void *mul, void *lookup_table,
+                         cudaStream_t stream, SqueezeLLMParams params) {
+  int height = params.height;
+  int width = params.width;
 
-  int batch = vec.size(0);
-  int vec_height = vec.size(1);
+  int batch = params.batch;
+  int vec_height =  params.vec_height;
 
   dim3 blocks(
     (height + BLOCKHEIGHT4 - 1) / BLOCKHEIGHT4,
     (width + BLOCKWIDTH - 1) / BLOCKWIDTH
   );
-  dim3 threads(BLOCKWIDTH);
-
-  const at::cuda::OptionalCUDAGuard device_guard(device_of(vec));
-  const cudaStream_t stream = at::cuda::getCurrentCUDAStream();
-  vllm::squeezellm::NUQ4MatMulKernel<<<blocks, threads, 0, stream>>>(
+   dim3 threads(BLOCKWIDTH);                     
+    vllm::squeezellm::NUQ4MatMulKernel<<<blocks, threads, 0, stream>>>(
 #ifndef USE_ROCM
-    (half2*) vec.data<at::Half>(),
+    // (half2*) vec.data<at::Half>(),
+    reinterpret_cast<half2 *>(vec),
 #else
-    (__half2*) vec.data_ptr<at::Half>(),
+    // (__half2*) vec.data_ptr<at::Half>(),
+    reinterpret_cast<__half2 *>(vec),
 #endif
-    mat.data_ptr<int>(),
+    reinterpret_cast<int *>(mat),
 #ifndef USE_ROCM
-    (half2*) mul.data<at::Half>(),
-    (__half*) lookup_table.data<at::Half>(),
+    // (half2*) mul.data<at::Half>(),
+    reinterpret_cast<half2 *>(mul),
+    // (__half*) lookup_table.data<at::Half>(),
+    reinterpret_cast<__half *>(lookup_table),
 #else
-    (float2*) mul.data_ptr<float>(),
-    (__half*) lookup_table.data_ptr<at::Half>(),
+    // (float2*) mul.data_ptr<float>(),
+     reinterpret_cast<float2 *>(mul),
+    // (__half*) lookup_table.data_ptr<at::Half>(),
+      reinterpret_cast<__half *>(lookup_table),
 #endif
     height, width, batch, vec_height
-  );
+  );  
 }
+}
+
+// // 4-bit matvec kernel (LUT-based)
+// void squeezellm_gemm(
+//   torch::Tensor vec,
+//   torch::Tensor mat,
+//   torch::Tensor mul,
+//   torch::Tensor lookup_table
+// ) {
+//   int height = mat.size(0);
+//   int width = mat.size(1);
+
+//   int batch = vec.size(0);
+//   int vec_height = vec.size(1);
+
+//   dim3 blocks(
+//     (height + BLOCKHEIGHT4 - 1) / BLOCKHEIGHT4,
+//     (width + BLOCKWIDTH - 1) / BLOCKWIDTH
+//   );
+//   dim3 threads(BLOCKWIDTH);
+
+//   const at::cuda::OptionalCUDAGuard device_guard(device_of(vec));
+//   const cudaStream_t stream = at::cuda::getCurrentCUDAStream();
+//   vllm::squeezellm::NUQ4MatMulKernel<<<blocks, threads, 0, stream>>>(
+// #ifndef USE_ROCM
+//     (half2*) vec.data<at::Half>(),
+// #else
+//     (__half2*) vec.data_ptr<at::Half>(),
+// #endif
+//     mat.data_ptr<int>(),
+// #ifndef USE_ROCM
+//     (half2*) mul.data<at::Half>(),
+//     (__half*) lookup_table.data<at::Half>(),
+// #else
+//     (float2*) mul.data_ptr<float>(),
+//     (__half*) lookup_table.data_ptr<at::Half>(),
+// #endif
+//     height, width, batch, vec_height
+//   );
+// }
 
 #undef BLOCKWIDTH
 #undef BLOCKHEIGHT4

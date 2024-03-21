@@ -1,10 +1,10 @@
-use candle_core::cuda_backend::cudarc::driver::{DevicePtr, DeviceRepr, LaunchAsync};
-use candle_core::cuda_backend::WrapErr;
-use candle_core::{
+use candle::cuda_backend::cudarc::driver::{DevicePtr, DeviceRepr, LaunchAsync};
+use candle::cuda_backend::WrapErr;
+use candle::{
     backend::BackendStorage, cuda_backend::cudarc::driver::LaunchConfig, shape::Dim, CpuStorage,
     CudaStorage, DType, Layout, Shape, Storage,
 };
-use candle_core::{Device, IndexOp, Tensor};
+use candle::{Device, IndexOp, Tensor};
 use common::cuda_ext::get_tensor_cuda_device_ptr;
 
 fn kernel_name(root: &str, dtype: DType) -> String {
@@ -12,11 +12,11 @@ fn kernel_name(root: &str, dtype: DType) -> String {
     format!("{root}_{dtype}")
 }
 
-pub fn cuda_tensor_ones(t: &Tensor) -> candle_core::Result<()> {
+pub fn cuda_tensor_ones(t: &Tensor) -> candle::Result<()> {
     let device = match t.device() {
         Device::Cuda(cuda_dev) => cuda_dev,
         _ => {
-            candle_core::bail!("unexpected device")
+            candle::bail!("unexpected device")
         }
     };
     let elem_count = t.shape().elem_count();
@@ -58,7 +58,7 @@ pub fn cuda_tensor_ones(t: &Tensor) -> candle_core::Result<()> {
 }
 
 #[test]
-fn test_cast() -> candle_core::Result<()> {
+fn test_cast() -> candle::Result<()> {
     let device = Device::new_cuda(0)?;
     let src = Tensor::ones((5), DType::U8, &device)?;
     //src.to_dtype(dtype)
@@ -68,7 +68,7 @@ fn test_cast() -> candle_core::Result<()> {
 }
 
 #[test]
-fn test_ones() -> candle_core::Result<()> {
+fn test_ones() -> candle::Result<()> {
     let device = Device::new_cuda(0)?;
     let src = Tensor::zeros(8, DType::F16, &device)?;
     let src1 = src.i(4..)?;

@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use candle_core::quantized::QTensor;
-use candle_core::quantized::{ggml_file, gguf_file};
-use candle_core::{DType, Device, IndexOp, Result, Tensor, D};
+use candle::quantized::QTensor;
+use candle::quantized::{ggml_file, gguf_file};
+use candle::{DType, Device, IndexOp, Result, Tensor, D};
 use candle_nn::{Embedding, Module};
 
 use crate::model_executor::input_metadata::InputMetadata;

@@ -1,4 +1,4 @@
-use candle_core::{DType, Device, Tensor};
+use candle::{DType, Device, Tensor};
 
 pub trait AttentionBias {
     // """
@@ -7,7 +7,7 @@ pub trait AttentionBias {
 
     // Shape should be like `[*, q_seqlen, k_seqlen]`
     // """
-    fn materialize(&self, dtype: DType, device: &Device) -> candle_core::Result<Tensor>;
+    fn materialize(&self, dtype: DType, device: &Device) -> candle::Result<Tensor>;
 }
 
 #[derive(Clone)]
@@ -20,7 +20,7 @@ struct _SeqLenInfo {
 }
 
 impl _SeqLenInfo {
-    pub fn from_seqlens<'a>(seqlens: impl Iterator<Item = &'a u32>) -> candle_core::Result<Self> {
+    pub fn from_seqlens<'a>(seqlens: impl Iterator<Item = &'a u32>) -> candle::Result<Self> {
         let mut seqstart_py = vec![0];
         let mut max_seqlen: i32 = -1;
         let mut min_seqlen: i32 = -1;
@@ -34,7 +34,7 @@ impl _SeqLenInfo {
             let append_v = *seqstart_py.last().unwrap() + seqlen;
             seqstart_py.push(append_v);
         }
-        let device = candle_core::Device::Cpu;
+        let device = candle::Device::Cpu;
         let seqstart = Tensor::from_vec(seqstart_py.clone(), seqstart_py.len(), &device)?;
         Ok(Self {
             seqstart,
@@ -52,10 +52,7 @@ pub struct BlockDiagonalMask {
 }
 
 impl BlockDiagonalMask {
-    pub fn from_seqlens(
-        q_seqlen: Vec<u32>,
-        kv_seqlen: Option<Vec<u32>>,
-    ) -> candle_core::Result<Self> {
+    pub fn from_seqlens(q_seqlen: Vec<u32>, kv_seqlen: Option<Vec<u32>>) -> candle::Result<Self> {
         let q_seqinfo = _SeqLenInfo::from_seqlens(q_seqlen.iter())?;
 
         let k_seqinfo = if kv_seqlen.is_none() || &q_seqlen == kv_seqlen.as_ref().unwrap() {
@@ -76,7 +73,7 @@ impl BlockDiagonalMask {
 }
 
 impl AttentionBias for BlockDiagonalMask {
-    fn materialize(&self, dtype: DType, device: &Device) -> candle_core::Result<Tensor> {
+    fn materialize(&self, dtype: DType, device: &Device) -> candle::Result<Tensor> {
         todo!()
     }
 }
@@ -95,7 +92,7 @@ impl BlockDiagonalCausalLocalAttentionMask {
 }
 
 impl AttentionBias for BlockDiagonalCausalLocalAttentionMask {
-    fn materialize(&self, dtype: DType, device: &Device) -> candle_core::Result<Tensor> {
+    fn materialize(&self, dtype: DType, device: &Device) -> candle::Result<Tensor> {
         todo!()
     }
 }
@@ -111,7 +108,7 @@ impl LowerTriangularMaskWithTensorBias {
 }
 
 impl AttentionBias for LowerTriangularMaskWithTensorBias {
-    fn materialize(&self, dtype: DType, device: &Device) -> candle_core::Result<Tensor> {
+    fn materialize(&self, dtype: DType, device: &Device) -> candle::Result<Tensor> {
         todo!()
     }
 }

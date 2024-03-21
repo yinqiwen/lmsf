@@ -1,5 +1,5 @@
-use candle_core::cuda_backend::cudarc::driver::sys::CUstream;
-use candle_core::{Device, Tensor, WithDType};
+use candle::cuda_backend::cudarc::driver::sys::CUstream;
+use candle::{Device, Tensor, WithDType};
 use common::{
     ffi::get_scalar_type,
     ffi::{CTensorView, ScalarType},
@@ -32,7 +32,7 @@ pub fn cuda_arange_<D: WithDType, F: TensorCreator>(
     device: &Device,
     tensor_creator: &mut F,
     stream: CUstream,
-) -> candle_core::Result<Tensor> {
+) -> candle::Result<Tensor> {
     let arange_elem_cnt = (end - start).to_f64() as i64;
     let out = tensor_creator.new(arange_elem_cnt as usize, D::DTYPE, device, false)?;
     let output_view = CTensorView::from(&out, false)?;
@@ -54,7 +54,7 @@ pub fn cuda_arange_<D: WithDType, F: TensorCreator>(
     Ok(out)
 }
 
-pub fn cuda_arange<D: WithDType>(start: D, end: D, device: &Device) -> candle_core::Result<Tensor> {
+pub fn cuda_arange<D: WithDType>(start: D, end: D, device: &Device) -> candle::Result<Tensor> {
     let mut default_creator = DefaultTensorCreator {};
     cuda_arange_(
         start,
@@ -66,7 +66,7 @@ pub fn cuda_arange<D: WithDType>(start: D, end: D, device: &Device) -> candle_co
 }
 
 #[test]
-fn test_arrange() -> candle_core::Result<()> {
+fn test_arrange() -> candle::Result<()> {
     let device = Device::new_cuda(0)?;
     let a = cuda_arange(0_u32, 100, &device)?;
     println!("{}", a.to_string());

@@ -4,6 +4,9 @@ Rust LLM Serving Framework
 
 -  Paged Attention
 -  Continuous Batch
+-  Quantization
+   - awq
+   - squeezellm
 
 
 # Getting Started

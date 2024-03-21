@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Result};
-use candle_core::{Device, Tensor};
+use candle::{Device, Tensor};
 
 use crate::common::config::{CacheConfig, ModelConfig, ParallelConfig};
 use crate::common::sampling_params::SamplingType;
@@ -23,7 +23,7 @@ use super::cache_engine::CacheEngine;
 
 const _PAD_SLOT_ID: i64 = -1;
 pub struct Worker {
-    device: candle_core::Device,
+    device: Device,
     cache_config: CacheConfig,
     model_config: Arc<ModelConfig>,
     cache_engine: CacheEngine,
@@ -39,7 +39,7 @@ impl Worker {
         parallel_config: &ParallelConfig,
         rank: usize,
     ) -> Result<Self> {
-        let device = candle_core::Device::new_cuda(rank)?;
+        let device = Device::new_cuda(rank)?;
         let mut filenames: Vec<String> = vec![];
         for rfilename in model_config.get_model_weight_files() {
             let path = format!("{}/{}", model_config.path(), rfilename);
@@ -63,7 +63,7 @@ impl Worker {
         )?;
 
         cuda_device.synchronize();
-        let (free, total) = candle_core::cuda_backend::cudarc::driver::result::mem_get_info()?;
+        let (free, total) = candle::cuda_backend::cudarc::driver::result::mem_get_info()?;
         tracing::info!("GPU free:{}, total:{} after load model.", free, total);
 
         let sampler = Sampler::new(
@@ -120,7 +120,7 @@ impl Worker {
         self.cache_engine.init(num_gpu_blocks, num_cpu_blocks)?;
         // self.device.synchronize()?;
         self.set_block_size(self.cache_config.block_size);
-        let (free, _) = candle_core::cuda_backend::cudarc::driver::result::mem_get_info()?;
+        let (free, _) = candle::cuda_backend::cudarc::driver::result::mem_get_info()?;
         tracing::info!("After init_cache, GPU free:{}bytes", free);
         Ok(())
     }
@@ -144,7 +144,7 @@ impl Worker {
         // torch.cuda.synchronize()
         // self.device.synchronize()?;
         let (free, total_gpu_memory) =
-            candle_core::cuda_backend::cudarc::driver::result::mem_get_info()?;
+            candle::cuda_backend::cudarc::driver::result::mem_get_info()?;
         let peak_memory = total_gpu_memory - free;
         let cache_block_size = self.cache_engine.get_cache_block_size(block_size);
 

@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use anyhow::{anyhow, Result};
-use candle_core::DType;
+use candle::DType;
 use clap::{Parser, ValueEnum};
 
 use crate::model_executor::models::{

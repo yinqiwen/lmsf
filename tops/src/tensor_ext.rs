@@ -1,5 +1,5 @@
-use candle_core::cuda_backend::cudarc::driver::sys::CUstream;
-use candle_core::{
+use candle::cuda_backend::cudarc::driver::sys::CUstream;
+use candle::{
     cuda_backend::cudarc::driver::DeviceRepr, CpuStorage, CudaStorage, DType, Device, Tensor,
 };
 use common::cuda_ext::get_tensor_cuda_device_ptr;
@@ -14,7 +14,7 @@ extern "C" {
     fn cuda_async_set(dptr: *mut c_void, v: c_int, n: c_int, stream: CUstream);
 }
 
-pub fn unsafe_tensor_zero(t: &Tensor) -> candle_core::Result<()> {
+pub fn unsafe_tensor_zero(t: &Tensor) -> candle::Result<()> {
     let n = t.dtype().size_in_bytes() * t.elem_count();
     match t.device() {
         Device::Cpu => unsafe { todo!("cpu memset zero") },
@@ -32,12 +32,9 @@ pub fn unsafe_tensor_zero(t: &Tensor) -> candle_core::Result<()> {
     Ok(())
 }
 
-pub fn unsafe_tensor_htod_copy(
-    host_tensor: &Tensor,
-    device_tensor: &Tensor,
-) -> candle_core::Result<()> {
+pub fn unsafe_tensor_htod_copy(host_tensor: &Tensor, device_tensor: &Tensor) -> candle::Result<()> {
     if host_tensor.dtype() != device_tensor.dtype() {
-        return Err(candle_core::Error::DTypeMismatchBinaryOp {
+        return Err(candle::Error::DTypeMismatchBinaryOp {
             lhs: host_tensor.dtype(),
             rhs: device_tensor.dtype(),
             op: "unsafe_tensor_htod_copy",
@@ -66,9 +63,9 @@ pub fn unsafe_tensor_htod_copy(
     Ok(())
 }
 
-pub fn unsafe_tensor_dtod_copy(dst: &Tensor, src: &Tensor) -> candle_core::Result<()> {
+pub fn unsafe_tensor_dtod_copy(dst: &Tensor, src: &Tensor) -> candle::Result<()> {
     if dst.dtype() != src.dtype() {
-        return Err(candle_core::Error::DTypeMismatchBinaryOp {
+        return Err(candle::Error::DTypeMismatchBinaryOp {
             lhs: dst.dtype(),
             rhs: src.dtype(),
             op: "unsafe_tensor_dtod_copy",
@@ -77,21 +74,52 @@ pub fn unsafe_tensor_dtod_copy(dst: &Tensor, src: &Tensor) -> candle_core::Resul
     }
     let n = src.dtype().size_in_bytes() * src.elem_count();
     // let dptr = get_tensor_kernel_param(device_tensor)?;
-    let dptr = get_tensor_cuda_device_ptr(dst)?;
-    let sptr = get_tensor_cuda_device_ptr(src)?;
-    // println!("copy {}", n);
-    match dst.device() {
-        Device::Cpu => unsafe {
-            std::ptr::copy_nonoverlapping(sptr.as_ffi_ptr(), dptr.as_ffi_ptr(), n);
-        },
-        Device::Cuda(cuda_dev) => {
-            let stream = cuda_dev.cu_stream();
-            unsafe {
-                cuda_async_dtod(dptr.as_ffi_ptr(), sptr.as_ffi_ptr(), n as i64, *stream);
+    let mut dptr = get_tensor_cuda_device_ptr(dst)?;
+    let mut sptr = get_tensor_cuda_device_ptr(src)?;
+
+    if dst.is_contiguous() {
+        match dst.device() {
+            Device::Cpu => unsafe {
+                std::ptr::copy_nonoverlapping(sptr.as_ffi_ptr(), dptr.as_ffi_ptr(), n);
+            },
+            Device::Cuda(cuda_dev) => {
+                let stream = cuda_dev.cu_stream();
+                unsafe {
+                    cuda_async_dtod(dptr.as_ffi_ptr(), sptr.as_ffi_ptr(), n as i64, *stream);
+                }
+            }
+            _ => {
+                unreachable!("unexpected storage type")
             }
         }
-        _ => {
-            unreachable!("unexpected storage type")
+    } else {
+        let dst_strides = dst.stride();
+        if dst_strides.len() != 2 {
+            unimplemented!("unimplemented")
+        } else {
+            match dst.device() {
+                Device::Cuda(cuda_dev) => {
+                    let stream = cuda_dev.cu_stream();
+                    let copy_n = src.dims()[1] * src.dtype().size_in_bytes();
+
+                    for _ in 0..src.dims()[0] {
+                        unsafe {
+                            cuda_async_dtod(
+                                dptr.as_ffi_ptr(),
+                                sptr.as_ffi_ptr(),
+                                copy_n as i64,
+                                *stream,
+                            );
+                            dptr.advance(copy_n);
+                            sptr.advance(copy_n);
+                            //dptr.as_ffi_ptr()
+                        }
+                    }
+                }
+                _ => {
+                    unreachable!("unexpected storage type")
+                }
+            }
         }
     }
     Ok(())
@@ -100,7 +128,7 @@ pub fn unsafe_tensor_dtod_copy(dst: &Tensor, src: &Tensor) -> candle_core::Resul
 pub fn unsafe_tensor_write<T: DeviceRepr + Unpin + std::fmt::Debug>(
     t: &Tensor,
     v: Vec<T>,
-) -> candle_core::Result<()> {
+) -> candle::Result<()> {
     let n = t.dtype().size_in_bytes() * v.len();
     //let dptr = get_tensor_kernel_param(t)?;
     let dptr = get_tensor_cuda_device_ptr(t)?;
@@ -125,7 +153,7 @@ pub fn unsafe_tensor_write<T: DeviceRepr + Unpin + std::fmt::Debug>(
 }
 
 #[test]
-fn test_cuda_async_htod_copy() -> candle_core::Result<()> {
+fn test_cuda_async_htod_copy() -> candle::Result<()> {
     let cpu = Device::Cpu;
     let device = Device::new_cuda(0)?;
     let v = vec![1.0_f32, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0];
@@ -140,7 +168,7 @@ fn test_cuda_async_htod_copy() -> candle_core::Result<()> {
 }
 
 #[test]
-fn test_cuda_zero() -> candle_core::Result<()> {
+fn test_cuda_zero() -> candle::Result<()> {
     let device = Device::new_cuda(0)?;
     let b = Tensor::ones(8, DType::F32, &device)?;
     // unsafe_tensor_write(&b, v)?;

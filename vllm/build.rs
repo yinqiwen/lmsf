@@ -7,13 +7,14 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::SystemTime;
 
-const KERNEL_FILES: [&str; 6] = [
+const KERNEL_FILES: [&str; 7] = [
     "cache_kernels.cu",
     "pos_encoding_kernels.cu",
     "attention/attention_kernels.cu",
     "layernorm_kernels.cu",
     "activation_kernels.cu",
     "quantization/awq/gemm_kernels.cu",
+    "quantization/squeezellm/quant_cuda_kernel.cu",
 ];
 
 fn is_dir_modified(dir: &Path, out_modified: &Result<SystemTime, std::io::Error>) -> bool {
@@ -74,6 +75,8 @@ fn main() -> Result<()> {
         .expect("Failed to create output attention directory");
     std::fs::create_dir_all(out_dir.join("quantization/awq"))
         .expect("Failed to create output quantization/awq directory");
+    std::fs::create_dir_all(out_dir.join("quantization/squeezellm"))
+        .expect("Failed to create output quantization/squeezellm directory");
 
     let ccbin_env = std::env::var("CANDLE_NVCC_CCBIN");
     println!("cargo:rerun-if-env-changed=CANDLE_NVCC_CCBIN");

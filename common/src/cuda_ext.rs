@@ -1,6 +1,6 @@
 use std::ops::Deref;
 
-use candle_core::{
+use candle::{
     cuda_backend::cudarc::driver::{sys, DevicePtr, DeviceRepr},
     Device, Storage, Tensor,
 };
@@ -33,23 +33,26 @@ impl CudaDevicePtr {
     pub fn null() -> Self {
         Self { ptr: 0 }
     }
+    pub fn advance(&mut self, n: usize) {
+        self.ptr += n as u64;
+    }
 }
 
-pub fn get_tensor_cuda_device_ptr(tensor: &Tensor) -> candle_core::Result<CudaDevicePtr> {
+pub fn get_tensor_cuda_device_ptr(tensor: &Tensor) -> candle::Result<CudaDevicePtr> {
     let (storage, _) = tensor.storage_and_layout();
     let start_offset = tensor.layout().start_offset();
     let data = match storage.deref() {
         Storage::Cuda(cuda_storage) => match tensor.dtype() {
-            candle_core::DType::U8 => {
+            candle::DType::U8 => {
                 // println!("slicelen:{}", cuda_storage.as_cuda_slice::<u8>()?.len());
                 cuda_storage.as_cuda_slice::<u8>()?.device_ptr()
             }
-            candle_core::DType::F16 => cuda_storage.as_cuda_slice::<half::f16>()?.device_ptr(),
-            candle_core::DType::BF16 => cuda_storage.as_cuda_slice::<half::bf16>()?.device_ptr(),
-            candle_core::DType::F32 => cuda_storage.as_cuda_slice::<f32>()?.device_ptr(),
-            candle_core::DType::U32 => cuda_storage.as_cuda_slice::<u32>()?.device_ptr(),
-            candle_core::DType::F64 => cuda_storage.as_cuda_slice::<f64>()?.device_ptr(),
-            candle_core::DType::I64 => {
+            candle::DType::F16 => cuda_storage.as_cuda_slice::<half::f16>()?.device_ptr(),
+            candle::DType::BF16 => cuda_storage.as_cuda_slice::<half::bf16>()?.device_ptr(),
+            candle::DType::F32 => cuda_storage.as_cuda_slice::<f32>()?.device_ptr(),
+            candle::DType::U32 => cuda_storage.as_cuda_slice::<u32>()?.device_ptr(),
+            candle::DType::F64 => cuda_storage.as_cuda_slice::<f64>()?.device_ptr(),
+            candle::DType::I64 => {
                 // println!("slicelen:{}", cuda_storage.as_cuda_slice::<i64>()?.len());
                 cuda_storage.as_cuda_slice::<i64>()?.device_ptr()
             }
@@ -74,5 +77,14 @@ pub fn cuda_profiler_start() {
 pub fn cuda_profiler_stop() {
     unsafe {
         sys::cuProfilerStop();
+    }
+}
+
+pub fn cuda_get_default_stream(device: &Device) -> candle::Result<sys::CUstream> {
+    match device {
+        Device::Cuda(cuda) => Ok(*cuda.cu_stream()),
+        _ => {
+            candle::bail!("unexpected device")
+        }
     }
 }

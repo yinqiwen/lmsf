@@ -1,6 +1,6 @@
 use std::ops::Deref;
 
-use candle_core::{
+use candle::{
     cuda_backend::cudarc::driver::{
         result::{memcpy_dtod_async, memcpy_dtoh_async, memcpy_htod_async},
         CudaFunction, CudaSlice, CudaStream, DevicePtr, DeviceRepr, LaunchAsync, LaunchConfig,
@@ -8,7 +8,7 @@ use candle_core::{
     CpuStorage, CudaDevice, DType, Device, IndexOp, Layout, Shape, Storage, Tensor, D,
 };
 
-fn scatter_add() -> candle_core::Result<()> {
+fn scatter_add() -> candle::Result<()> {
     // let device = Device::new_cuda(0)?;
     let device = Device::new_cuda(0)?;
     let logits_idx_end = 32000_usize;

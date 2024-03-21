@@ -1,4 +1,4 @@
-use candle_core::{
+use candle::{
     cuda_backend::{cudarc::driver::sys::CUstream, DeviceId},
     DType, Device, Shape, Tensor,
 };
@@ -43,15 +43,11 @@ impl Drop for CublasWrapper {
 }
 
 impl CublasWrapper {
-    pub fn new(
-        device: &Device,
-        dtype: DType,
-        stream: CUstream,
-    ) -> candle_core::Result<CublasWrapper> {
+    pub fn new(device: &Device, dtype: DType, stream: CUstream) -> candle::Result<CublasWrapper> {
         let device_id = match device {
             Device::Cuda(cuda) => *cuda.cu_device(),
             _ => {
-                candle_core::bail!("not supported device")
+                candle::bail!("not supported device")
             }
         };
 
@@ -60,7 +56,7 @@ impl CublasWrapper {
             DType::BF16 => unsafe { new_gemm(device_id, stream, ScalarType::DATA_BF16 as i32) },
             DType::F32 => unsafe { new_gemm(device_id, stream, ScalarType::DATA_F32 as i32) },
             _ => {
-                candle_core::bail!("not supported dtype")
+                candle::bail!("not supported dtype")
             }
         };
         Ok(Self { wrapper: p })
@@ -70,7 +66,7 @@ impl CublasWrapper {
         input: &Tensor,
         weight: &Tensor,
         tensor_creator: &mut F,
-    ) -> candle_core::Result<Tensor> {
+    ) -> candle::Result<Tensor> {
         let output = if input.dims().len() == 3 {
             let (batch, num, tmp) = input.dims3()?;
             let (output_dims, _) = weight.dims2()?;
@@ -119,14 +115,14 @@ impl CublasWrapper {
 
         Ok(output)
     }
-    pub fn linear(&self, input: &Tensor, weight: &Tensor) -> candle_core::Result<Tensor> {
+    pub fn linear(&self, input: &Tensor, weight: &Tensor) -> candle::Result<Tensor> {
         let mut default_creator = DefaultTensorCreator {};
         self.linear_(input, weight, &mut default_creator)
     }
 }
 
 #[test]
-fn test_gemm_config() -> candle_core::Result<()> {
+fn test_gemm_config() -> candle::Result<()> {
     unsafe {
         let gemm = new_gemm(0, std::ptr::null_mut(), ScalarType::DATA_F16 as i32);
 

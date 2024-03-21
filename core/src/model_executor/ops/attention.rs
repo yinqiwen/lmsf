@@ -1,6 +1,6 @@
 use std::ops::Deref;
 
-use candle_core::{
+use candle::{
     cuda_backend::cudarc::driver::{
         result::{memcpy_dtod_async, memcpy_dtoh_async, memcpy_htod_async},
         CudaFunction, CudaSlice, CudaStream, DevicePtr, DeviceRepr, LaunchAsync, LaunchConfig,
@@ -34,7 +34,7 @@ struct PagedAttentionKernelParams {
 unsafe impl DeviceRepr for PagedAttentionKernelParams {}
 
 impl PagedAttentionOps {
-    pub fn new(device: &CudaDevice) -> candle_core::Result<Self> {
+    pub fn new(device: &CudaDevice) -> candle::Result<Self> {
         Ok(Self {
             paged_attention_v1: vec![
                 device.get_or_load_func("paged_attention_v1_f16", kernels::ATTENTION_KERNELS)?,

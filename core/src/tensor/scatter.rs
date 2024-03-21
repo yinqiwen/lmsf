@@ -1,10 +1,10 @@
-use candle_core::cuda_backend::cudarc::driver::{DevicePtr, DeviceRepr, LaunchAsync};
-use candle_core::cuda_backend::WrapErr;
-use candle_core::{
+use candle::cuda_backend::cudarc::driver::{DevicePtr, DeviceRepr, LaunchAsync};
+use candle::cuda_backend::WrapErr;
+use candle::{
     backend::BackendStorage, cuda_backend::cudarc::driver::LaunchConfig, shape::Dim, CpuStorage,
     CudaStorage, DType, Layout, Shape, Storage,
 };
-use candle_core::{Device, Tensor};
+use candle::{Device, Tensor};
 use common::cuda_ext::get_tensor_cuda_device_ptr;
 use std::ops::Deref;
 
@@ -18,7 +18,7 @@ pub fn cuda_scatter_add<D: Dim>(
     index: &Tensor,
     src: &Tensor,
     dim: D,
-) -> candle_core::Result<()> {
+) -> candle::Result<()> {
     let dim = dim.to_index(dst.shape(), "scatter-add")?;
     let source_dims = src.dims();
     let self_dims = dst.dims();
@@ -35,7 +35,7 @@ pub fn cuda_scatter_add<D: Dim>(
         mismatch
     };
     if mismatch {
-        return Err(candle_core::Error::ShapeMismatchBinaryOp {
+        return Err(candle::Error::ShapeMismatchBinaryOp {
             op: "cuda-scatter-add (self, src)",
             lhs: dst.shape().clone(),
             rhs: src.shape().clone(),
@@ -43,7 +43,7 @@ pub fn cuda_scatter_add<D: Dim>(
         .bt())?;
     }
     if index.dims() != src.dims() {
-        return Err(candle_core::Error::ShapeMismatchBinaryOp {
+        return Err(candle::Error::ShapeMismatchBinaryOp {
             op: "cuda-scatter-add (indexes, src)",
             lhs: index.shape().clone(),
             rhs: src.shape().clone(),
@@ -54,16 +54,16 @@ pub fn cuda_scatter_add<D: Dim>(
     let device = match dst.device() {
         Device::Cuda(cuda_dev) => cuda_dev,
         _ => {
-            candle_core::bail!("unexpected device")
+            candle::bail!("unexpected device")
         }
     };
     let (ids_o1, ids_o2) = match index.layout().contiguous_offsets() {
         Some(o12) => o12,
-        None => return Err(candle_core::Error::RequiresContiguous { op: "scatter-add" }.bt())?,
+        None => return Err(candle::Error::RequiresContiguous { op: "scatter-add" }.bt())?,
     };
     let (src_o1, src_o2) = match src.layout().contiguous_offsets() {
         Some(o12) => o12,
-        None => return Err(candle_core::Error::RequiresContiguous { op: "scatter-add" }.bt())?,
+        None => return Err(candle::Error::RequiresContiguous { op: "scatter-add" }.bt())?,
     };
 
     let func = device.get_or_load_func(
@@ -86,7 +86,7 @@ pub fn cuda_scatter_add<D: Dim>(
 }
 
 #[test]
-fn test_inplace_scatter_add() -> candle_core::Result<()> {
+fn test_inplace_scatter_add() -> candle::Result<()> {
     let device = Device::new_cuda(0)?;
     let src = Tensor::ones((2, 5), DType::I64, &device)?;
     let index = Tensor::new(vec![vec![0_i64, 1, 2, 0, 0], vec![0, 1, 2, 2, 2]], &device)?;

@@ -6,7 +6,7 @@ edition = "2021"
 
 [dependencies]
 libc = { workspace = true }
-candle-core = { workspace = true }
+candle = { workspace = true }
 candle-nn = { workspace = true }
 half = { workspace = true }
 common = { path = "../common", package = "lmsf-common" }

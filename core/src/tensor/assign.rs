@@ -1,10 +1,10 @@
-use candle_core::cuda_backend::cudarc::driver::{DevicePtr, DeviceRepr, LaunchAsync};
-use candle_core::cuda_backend::WrapErr;
-use candle_core::{
+use candle::cuda_backend::cudarc::driver::{DevicePtr, DeviceRepr, LaunchAsync};
+use candle::cuda_backend::WrapErr;
+use candle::{
     backend::BackendStorage, cuda_backend::cudarc::driver::LaunchConfig, shape::Dim, CpuStorage,
     CudaStorage, DType, Layout, Shape, Storage, WithDType,
 };
-use candle_core::{Device, IndexOp, Tensor};
+use candle::{Device, IndexOp, Tensor};
 use common::cuda_ext::get_tensor_cuda_device_ptr;
 
 fn kernel_name(root: &str, dtype: DType) -> String {
@@ -12,11 +12,11 @@ fn kernel_name(root: &str, dtype: DType) -> String {
     format!("{root}_{dtype}")
 }
 
-pub fn cuda_assign<D: WithDType>(t: &Tensor, v: D) -> candle_core::Result<()> {
+pub fn cuda_assign<D: WithDType>(t: &Tensor, v: D) -> candle::Result<()> {
     let device = match t.device() {
         Device::Cuda(cuda_dev) => cuda_dev,
         _ => {
-            candle_core::bail!("unexpected device")
+            candle::bail!("unexpected device")
         }
     };
     if D::DTYPE != t.dtype() {}
@@ -28,7 +28,7 @@ pub fn cuda_assign<D: WithDType>(t: &Tensor, v: D) -> candle_core::Result<()> {
     let dims_and_strides = device.htod_copy([dims, t.stride()].concat()).w()?;
     let data = get_tensor_cuda_device_ptr(t)?;
 
-    let func = device.get_or_load_func(&kernel_name("assign", t.dtype()), candle_patch::ASSIGN)?;
+    let func = device.get_or_load_func(&kernel_name("assign", t.dtype()), candle_patch::UNARY)?;
 
     match t.dtype() {
         DType::U8 => {
@@ -101,8 +101,8 @@ pub fn cuda_assign<D: WithDType>(t: &Tensor, v: D) -> candle_core::Result<()> {
 }
 
 #[test]
-fn test_assign() -> candle_core::Result<()> {
-    let device = candle_core::Device::new_cuda(0).unwrap();
+fn test_assign() -> candle::Result<()> {
+    let device = candle::Device::new_cuda(0).unwrap();
 
     let test = Tensor::rand(1_f32, 10.0, (2, 10), &device)?;
     println!("{}", test.to_string());

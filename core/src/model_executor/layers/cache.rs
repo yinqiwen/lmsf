@@ -1,4 +1,4 @@
-use candle_core::{Device, Result, Tensor};
+use candle::{Device, Result, Tensor};
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};

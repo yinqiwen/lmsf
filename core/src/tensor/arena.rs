@@ -1,6 +1,6 @@
 use std::sync::atomic::AtomicUsize;
 
-use candle_core::{DType, Device, IndexOp, Shape, Tensor};
+use candle::{DType, Device, IndexOp, Shape, Tensor};
 use common::TensorCreator;
 use metrics::atomics::AtomicU64;
 
@@ -15,7 +15,7 @@ struct TensorArenaUnit {
 }
 
 impl TensorArenaUnit {
-    pub fn new(size: usize, dtype: DType, device: &Device) -> candle_core::Result<Self> {
+    pub fn new(size: usize, dtype: DType, device: &Device) -> candle::Result<Self> {
         let cache = Tensor::zeros(size, dtype, device)?;
         Ok(Self {
             cache,
@@ -28,10 +28,10 @@ impl TensorArenaUnit {
         self.curosr.store(0, std::sync::atomic::Ordering::SeqCst);
     }
 
-    pub fn get(&self, dtype: DType, shape: &Shape, zero: bool) -> candle_core::Result<Tensor> {
+    pub fn get(&self, dtype: DType, shape: &Shape, zero: bool) -> candle::Result<Tensor> {
         // let shape = shape.into();
         if dtype != self.cache.dtype() {
-            return Err(candle_core::Error::DTypeMismatchBinaryOp {
+            return Err(candle::Error::DTypeMismatchBinaryOp {
                 lhs: dtype,
                 rhs: self.cache.dtype(),
                 op: "arena_get",
@@ -41,7 +41,7 @@ impl TensorArenaUnit {
         let allign_n = (n + ALLIGNMENT - 1) / ALLIGNMENT * ALLIGNMENT;
         let curosr = self.curosr.load(std::sync::atomic::Ordering::SeqCst);
         if curosr + allign_n > self.capacity {
-            return candle_core::bail!(
+            return candle::bail!(
                 "arena buffer overflow with requestd:{}, while rest:{}",
                 allign_n,
                 self.capacity - curosr
@@ -98,7 +98,7 @@ impl TensorArenaUnitGroup {
         dtype: DType,
         shape: &Shape,
         zero: bool,
-    ) -> candle_core::Result<Tensor> {
+    ) -> candle::Result<Tensor> {
         // println!("####{} {}", curosr, self.group.len());
         if curosr < self.group.len() {
             match self.group[curosr].get(dtype, shape, zero) {
@@ -108,7 +108,7 @@ impl TensorArenaUnitGroup {
                 Err(_) => {}
             }
         }
-        Err(candle_core::Error::Msg("no space".to_owned()))
+        Err(candle::Error::Msg("no space".to_owned()))
         //candle_core::bail!("no space")
     }
     pub fn get<S: Into<Shape>>(
@@ -117,7 +117,7 @@ impl TensorArenaUnitGroup {
         shape: S,
         zero: bool,
         device: &Device,
-    ) -> candle_core::Result<Tensor> {
+    ) -> candle::Result<Tensor> {
         let shape = shape.into();
         let mut curosr = self.cursor.load(std::sync::atomic::Ordering::SeqCst);
         while curosr < self.group.len() {
@@ -211,7 +211,7 @@ impl TensorArena {
         dtype: DType,
         shape: S,
         zero: bool,
-    ) -> candle_core::Result<Tensor> {
+    ) -> candle::Result<Tensor> {
         let idx = dtype as usize;
         let cache = &self.cache[idx];
         self.cache[idx].get(dtype, shape, zero, &self.device)
@@ -225,9 +225,9 @@ impl TensorCreator for TensorArena {
         dtype: DType,
         device: &Device,
         zero: bool,
-    ) -> candle_core::Result<Tensor> {
+    ) -> candle::Result<Tensor> {
         if !self.device.same_device(device) {
-            return Err(candle_core::Error::DeviceMismatchBinaryOp {
+            return Err(candle::Error::DeviceMismatchBinaryOp {
                 lhs: self.device.location(),
                 rhs: device.location(),
                 op: "new_tensor",
@@ -238,7 +238,7 @@ impl TensorCreator for TensorArena {
 }
 
 #[test]
-fn test_arena() -> candle_core::Result<()> {
+fn test_arena() -> candle::Result<()> {
     let device = Device::new_cuda(0)?;
     let mut arena = TensorArena::new(&device);
 

@@ -1,6 +1,6 @@
-use candle_core::cuda_backend::cudarc::driver::sys::CUstream;
-use candle_core::Module;
-use candle_core::{Device, Shape, Tensor};
+use candle::cuda_backend::cudarc::driver::sys::CUstream;
+use candle::Module;
+use candle::{Device, Shape, Tensor};
 use common::cuda_ext::get_tensor_cuda_device_ptr;
 use common::ffi::{get_scalar_type, CShapeView, CTensorView, ScalarType};
 use common::{DefaultTensorCreator, TensorCreator};
@@ -21,7 +21,7 @@ extern "C" {
     fn vllm_silu_and_mul(out: *mut c_void, input: *mut c_void, params: SiluMulKernelParams);
 }
 
-pub fn silu_and_mul(input: &Tensor) -> candle_core::Result<Tensor> {
+pub fn silu_and_mul(input: &Tensor) -> candle::Result<Tensor> {
     // let last_dim_size = *input.dims().last().unwrap();
     // let num_tokens = input.elem_count() / last_dim_size;
     // let d = last_dim_size / 2;
@@ -50,7 +50,7 @@ pub fn silu_and_mul(input: &Tensor) -> candle_core::Result<Tensor> {
 pub fn silu_and_mul_<F: TensorCreator>(
     input: &Tensor,
     tensor_creator: &mut F,
-) -> candle_core::Result<Tensor> {
+) -> candle::Result<Tensor> {
     let last_dim_size = *input.dims().last().unwrap();
     let num_tokens = input.elem_count() / last_dim_size;
     let d = last_dim_size / 2;

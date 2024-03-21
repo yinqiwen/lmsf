@@ -1,5 +1,5 @@
-use candle_core::cuda_backend::cudarc::driver::sys::CUstream;
-use candle_core::{CpuStorage, CudaStorage, DType, Device, Layout, Shape, Tensor};
+use candle::cuda_backend::cudarc::driver::sys::CUstream;
+use candle::{CpuStorage, CudaStorage, DType, Device, Layout, Shape, Tensor};
 use common::{
     ffi::get_scalar_type,
     ffi::{CTensorView, ScalarType},
@@ -21,11 +21,7 @@ extern "C" {
 
 use common::{DefaultTensorCreator, TensorCreator};
 
-pub fn cuda_repeat<S: Into<Shape>>(
-    t: &Tensor,
-    s: S,
-    stream: CUstream,
-) -> candle_core::Result<Tensor> {
+pub fn cuda_repeat<S: Into<Shape>>(t: &Tensor, s: S, stream: CUstream) -> candle::Result<Tensor> {
     // let s = s.into();
     // if s.dims().len() != t.dims().len() {
     //     return Err(candle_core::Error::ShapeMismatchBinaryOp {
@@ -84,10 +80,10 @@ pub fn cuda_repeat_<S: Into<Shape>, F: TensorCreator>(
     s: S,
     tensor_creator: &mut F,
     stream: CUstream,
-) -> candle_core::Result<Tensor> {
+) -> candle::Result<Tensor> {
     let s = s.into();
     if s.dims().len() != t.dims().len() {
-        return Err(candle_core::Error::ShapeMismatchBinaryOp {
+        return Err(candle::Error::ShapeMismatchBinaryOp {
             lhs: t.shape().clone(),
             rhs: s,
             op: "cuda_repeat",
@@ -118,7 +114,7 @@ pub fn cuda_repeat_<S: Into<Shape>, F: TensorCreator>(
             false,
         )?
     } else {
-        return Err(candle_core::Error::UnexpectedNumberOfDims {
+        return Err(candle::Error::UnexpectedNumberOfDims {
             expected: 2,
             got: s.dims().len(),
             shape: s,
@@ -143,7 +139,7 @@ pub fn cuda_repeat_<S: Into<Shape>, F: TensorCreator>(
 }
 
 #[test]
-fn test_repeate() -> candle_core::Result<()> {
+fn test_repeate() -> candle::Result<()> {
     let device = Device::new_cuda(0)?;
     let a = Tensor::new(&[1.0], &device)?;
     let a = a.reshape((1, 1))?;

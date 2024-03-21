@@ -46,7 +46,7 @@ pub enum TopkType {
     AF_TOPK_DEFAULT = 0, // Default option (max)
 }
 
-use candle_core::{cuda_backend::cudarc::driver::DeviceRepr, DType, Shape, Tensor};
+use candle::{cuda_backend::cudarc::driver::DeviceRepr, DType, Shape, Tensor};
 
 use crate::cuda_ext::get_tensor_cuda_device_ptr;
 
@@ -73,7 +73,7 @@ impl CTensorView {
             dtype: 0,
         }
     }
-    pub fn from(t: &Tensor, column_major: bool) -> candle_core::Result<CTensorView> {
+    pub fn from(t: &Tensor, column_major: bool) -> candle::Result<CTensorView> {
         let ptr = get_tensor_cuda_device_ptr(t)?.as_ffi_ptr();
         let mut dims = (1_i64, 1, 1, 1);
         if t.shape().dims().len() == 1 {
@@ -87,7 +87,7 @@ impl CTensorView {
                 dims.1 = t.shape().dims()[1] as i64;
             }
         } else if column_major {
-            candle_core::bail!("Not supported shapes:{:?}", t.shape());
+            candle::bail!("Not supported shapes:{:?}", t.shape());
         } else if t.shape().dims().len() == 3 {
             dims.0 = t.shape().dims()[0] as i64;
             dims.1 = t.shape().dims()[1] as i64;

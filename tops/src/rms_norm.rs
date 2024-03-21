@@ -1,6 +1,6 @@
-use candle_core::cuda_backend::cudarc::driver::sys::CUstream;
-use candle_core::Module;
-use candle_core::{Device, Shape, Tensor};
+use candle::cuda_backend::cudarc::driver::sys::CUstream;
+use candle::Module;
+use candle::{Device, Shape, Tensor};
 use common::ffi::{CShapeView, CTensorView};
 use common::{DefaultTensorCreator, TensorCreator};
 use libc::c_float;
@@ -38,11 +38,7 @@ impl RmsNorm {
             elementwise_affine,
         }
     }
-    pub fn load<S: Into<Shape>>(
-        s: S,
-        eps: f64,
-        vb: candle_nn::VarBuilder,
-    ) -> candle_core::Result<Self> {
+    pub fn load<S: Into<Shape>>(s: S, eps: f64, vb: candle_nn::VarBuilder) -> candle::Result<Self> {
         let normalized_shape = s.into();
         let weight = vb.get_with_hints(
             normalized_shape.clone(),
@@ -62,7 +58,7 @@ impl RmsNorm {
         &self,
         xs: &Tensor,
         tensor_creator: &mut F,
-    ) -> candle_core::Result<Tensor> {
+    ) -> candle::Result<Tensor> {
         let y = tensor_creator.new(xs.shape(), xs.dtype(), xs.device(), false)?;
         let y_view = common::ffi::CTensorView::from(&y, false)?;
         let x_view = common::ffi::CTensorView::from(xs, false)?;
@@ -95,15 +91,15 @@ impl RmsNorm {
     }
 }
 
-impl candle_core::Module for RmsNorm {
-    fn forward(&self, xs: &Tensor) -> candle_core::Result<Tensor> {
+impl candle::Module for RmsNorm {
+    fn forward(&self, xs: &Tensor) -> candle::Result<Tensor> {
         let mut default_creator = DefaultTensorCreator {};
         self.forward_(xs, &mut default_creator)
     }
 }
 
 #[test]
-fn test_rms_norm() -> candle_core::Result<()> {
+fn test_rms_norm() -> candle::Result<()> {
     let device = Device::new_cuda(0)?;
     let a = Tensor::new(
         &[

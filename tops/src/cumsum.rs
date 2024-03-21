@@ -1,6 +1,6 @@
-use candle_core::cuda_backend::cudarc::driver::sys::CUstream;
-use candle_core::shape::Dim;
-use candle_core::{CpuStorage, CudaStorage, DType, Device, Layout, Shape, Tensor};
+use candle::cuda_backend::cudarc::driver::sys::CUstream;
+use candle::shape::Dim;
+use candle::{CpuStorage, CudaStorage, DType, Device, Layout, Shape, Tensor};
 use common::{
     ffi::get_scalar_type,
     ffi::{CTensorView, ScalarType},
@@ -15,7 +15,7 @@ extern "C" {
     fn cuda_cumsum_tensor(input: CTensorView, dim: c_uint, stream: CUstream, output: CTensorView);
 }
 
-pub fn cuda_cumsum(t: &Tensor, dim: usize, stream: CUstream) -> candle_core::Result<Tensor> {
+pub fn cuda_cumsum(t: &Tensor, dim: usize, stream: CUstream) -> candle::Result<Tensor> {
     let mut default_creator = DefaultTensorCreator {};
     cuda_cumsum_(t, dim, &mut default_creator, stream)
 }
@@ -25,7 +25,7 @@ pub fn cuda_cumsum_<F: TensorCreator, D: Dim>(
     dim: D,
     tensor_creator: &mut F,
     stream: CUstream,
-) -> candle_core::Result<Tensor> {
+) -> candle::Result<Tensor> {
     let out = tensor_creator.new(t.shape(), t.dtype(), t.device(), false)?;
     //let out = Tensor::zeros(t.shape(), t.dtype(), t.device())?;
     let dim = dim.to_index(t.shape(), "cuda_cumsum_")?;

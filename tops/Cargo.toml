@@ -6,7 +6,7 @@ edition = "2021"
 
 [dependencies]
 libc = { workspace = true }
-candle-core = { workspace = true }
+candle = { workspace = true }
 candle-nn = { workspace = true }
 half = { workspace = true }
 common = { path = "../common", package = "lmsf-common" }
@@ -22,4 +22,4 @@ bindgen_cuda = "0.1"
 
 [features]
 default = ["cuda"]
-cuda = ["candle-core/cuda"]
+cuda = ["candle/cuda"]

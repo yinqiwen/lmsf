@@ -1,12 +1,12 @@
 use crate::model_executor::{
     layers::{
-        quantization::{AWQConfig, QuantizationConfig},
+        quantization::{AWQConfig, AWQLinearWeights, QuantizationConfig},
         Cache,
     },
     parallel::ParallelState,
 };
 use anyhow::anyhow;
-use candle_core::{
+use candle::{
     quantized::gguf_file::{self, VersionedMagic},
     Device,
 };
@@ -62,7 +62,7 @@ impl ModelFactory {
         quantize_type: Option<QuantizeType>,
     ) -> anyhow::Result<Vec<String>> {
         let model_weight_files = match quantize_type {
-            None | Some(QuantizeType::AWQ) => {
+            None => {
                 let safetensors_index_path = format!("{}/model.safetensors.index.json", model_path);
                 let safetensors_index_content = std::fs::read_to_string(safetensors_index_path)
                     .map_err(|e| anyhow!("No safetensors.index.json found!:{}", e))?;
@@ -77,6 +77,9 @@ impl ModelFactory {
                 let mut safetensors: Vec<_> = safetensors.into_iter().collect();
                 safetensors.sort();
                 safetensors
+            }
+            Some(QuantizeType::AWQ) => {
+                vec!["model.safetensors".to_string()]
             } // Some(QuantizeType::Q2_K)
               // | Some(QuantizeType::Q3_K_L)
               // | Some(QuantizeType::Q3_K_M)
@@ -120,12 +123,25 @@ impl ModelFactory {
         device: &Device,
     ) -> anyhow::Result<Box<dyn Model>> {
         let preinit_model = || -> anyhow::Result<_> {
+            let is_pth = str::ends_with(model_weight_files[0].as_str(), ".pt");
+            let is_safetensors = str::ends_with(model_weight_files[0].as_str(), ".safetensors");
+
             let vb = unsafe {
-                candle_nn::VarBuilder::from_mmaped_safetensors(
-                    model_weight_files,
-                    cfg.get_dtype()?,
-                    &device,
-                )?
+                if is_safetensors {
+                    candle_nn::VarBuilder::from_mmaped_safetensors(
+                        model_weight_files,
+                        cfg.get_dtype()?,
+                        &device,
+                    )?
+                } else if is_pth {
+                    candle_nn::VarBuilder::from_pth(
+                        model_weight_files[0].as_str(),
+                        cfg.get_dtype()?,
+                        &device,
+                    )?
+                } else {
+                    panic!("Not supported model format:{:?}", model_weight_files)
+                }
             };
             let dtype = cfg.get_dtype()?;
             let cfg_any = cfg.as_any();
@@ -154,12 +170,13 @@ impl ModelFactory {
                 Some(QuantizeType::AWQ) => {
                     let (vb, llama_cfg, cache, parallel_state) = preinit_model()?;
                     let awq_config = AWQConfig::load(dir)?;
-                    let llama = Llama::<UnquantizedLinearWeights>::load(
+
+                    let llama = Llama::<AWQLinearWeights>::load(
                         vb,
                         &cache,
                         llama_cfg,
                         &parallel_state,
-                        None,
+                        awq_config,
                     )?;
                     Ok(Box::new(llama))
                 } // Some(QuantizeType::Q2_K)

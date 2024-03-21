@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Result};
-use candle_core::DType;
-use candle_core::Tensor;
+use candle::DType;
+use candle::Tensor;
 use std::sync::atomic::AtomicUsize;
 
 use crate::model_executor::input_metadata::InputMetadata;

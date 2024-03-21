@@ -3,28 +3,28 @@ macro_rules! get_cuda_slice {
     ($obj:expr) => {{
         let (_storage, _) = $obj.storage_and_layout();
         match _storage.deref() {
-            candle_core::Storage::Cuda(cuda_storage) => match $obj.dtype() {
-                candle_core::DType::U8 => crate::cuda_ext::DeviceDataPtr::new(
+            candle::Storage::Cuda(cuda_storage) => match $obj.dtype() {
+                candle::DType::U8 => crate::cuda_ext::DeviceDataPtr::new(
                     *cuda_storage.as_cuda_slice::<u8>()?.device_ptr() as *mut std::ffi::c_void,
                 ),
-                candle_core::DType::F16 => crate::cuda_ext::DeviceDataPtr::new(
+                candle::DType::F16 => crate::cuda_ext::DeviceDataPtr::new(
                     *cuda_storage.as_cuda_slice::<half::f16>()?.device_ptr()
                         as *mut std::ffi::c_void,
                 ),
-                candle_core::DType::BF16 => crate::cuda_ext::DeviceDataPtr::new(
+                candle::DType::BF16 => crate::cuda_ext::DeviceDataPtr::new(
                     *cuda_storage.as_cuda_slice::<half::bf16>()?.device_ptr()
                         as *mut std::ffi::c_void,
                 ),
-                candle_core::DType::F32 => crate::cuda_ext::DeviceDataPtr::new(
+                candle::DType::F32 => crate::cuda_ext::DeviceDataPtr::new(
                     *cuda_storage.as_cuda_slice::<f32>()?.device_ptr() as *mut std::ffi::c_void,
                 ),
-                candle_core::DType::U32 => crate::cuda_ext::DeviceDataPtr::new(
+                candle::DType::U32 => crate::cuda_ext::DeviceDataPtr::new(
                     *cuda_storage.as_cuda_slice::<u32>()?.device_ptr() as *mut std::ffi::c_void,
                 ),
-                candle_core::DType::F64 => crate::cuda_ext::DeviceDataPtr::new(
+                candle::DType::F64 => crate::cuda_ext::DeviceDataPtr::new(
                     *cuda_storage.as_cuda_slice::<f64>()?.device_ptr() as *mut std::ffi::c_void,
                 ),
-                candle_core::DType::I64 => crate::cuda_ext::DeviceDataPtr::new(
+                candle::DType::I64 => crate::cuda_ext::DeviceDataPtr::new(
                     cuda_storage.as_cuda_slice::<i64>()?.as_kernel_param(),
                 ),
             },
@@ -39,25 +39,23 @@ macro_rules! get_cuda_device_ptr {
         let (_storage, _) = $obj.storage_and_layout();
         match _storage.deref() {
             candle_core::Storage::Cuda(cuda_storage) => match $obj.dtype() {
-                candle_core::DType::U8 => {
+                candle::DType::U8 => {
                     *cuda_storage.as_cuda_slice::<u8>()?.device_ptr() as *mut std::ffi::c_void
                 }
-                candle_core::DType::F16 => *cuda_storage.as_cuda_slice::<half::f16>()?.device_ptr()
+                candle::DType::F16 => *cuda_storage.as_cuda_slice::<half::f16>()?.device_ptr()
                     as *mut std::ffi::c_void,
-                candle_core::DType::BF16 => {
-                    *cuda_storage.as_cuda_slice::<half::bf16>()?.device_ptr()
-                        as *mut std::ffi::c_void
-                }
-                candle_core::DType::F32 => {
+                candle::DType::BF16 => *cuda_storage.as_cuda_slice::<half::bf16>()?.device_ptr()
+                    as *mut std::ffi::c_void,
+                candle::DType::F32 => {
                     *cuda_storage.as_cuda_slice::<f32>()?.device_ptr() as *mut std::ffi::c_void
                 }
-                candle_core::DType::U32 => {
+                candle::DType::U32 => {
                     *cuda_storage.as_cuda_slice::<u32>()?.device_ptr() as *mut std::ffi::c_void
                 }
-                candle_core::DType::F64 => {
+                candle::DType::F64 => {
                     *cuda_storage.as_cuda_slice::<f64>()?.device_ptr() as *mut std::ffi::c_void
                 }
-                candle_core::DType::I64 => {
+                candle::DType::I64 => {
                     *cuda_storage.as_cuda_slice::<i64>()?.device_ptr() as *mut std::ffi::c_void
                 }
             },

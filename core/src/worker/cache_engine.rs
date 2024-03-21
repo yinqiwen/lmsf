@@ -1,10 +1,10 @@
 use crate::common::config::{CacheConfig, ModelConfig, ParallelConfig};
 
 use anyhow::Result;
-use candle_core::cuda_backend::cudarc::driver::sys::CUevent;
-use candle_core::cuda_backend::cudarc::driver::CudaStream;
-use candle_core::CudaDevice;
-use candle_core::{Device, Tensor};
+use candle::cuda_backend::cudarc::driver::sys::CUevent;
+use candle::cuda_backend::cudarc::driver::CudaStream;
+use candle::CudaDevice;
+use candle::{Device, Tensor};
 use std::sync::Arc;
 
 use std::collections::HashMap;
@@ -45,7 +45,7 @@ impl CacheEngine {
         for _i in 0..num_layers {
             let mut event: CUevent = std::ptr::null_mut();
             unsafe {
-                candle_core::cuda_backend::cudarc::driver::sys::cuEventCreate(&mut event, 0);
+                candle::cuda_backend::cudarc::driver::sys::cuEventCreate(&mut event, 0);
             }
             events.push(event);
         }
@@ -221,7 +221,7 @@ impl CacheEngine {
             //     &self.cache_stream,
             // )?;
             unsafe {
-                candle_core::cuda_backend::cudarc::driver::sys::cuEventRecord(
+                candle::cuda_backend::cudarc::driver::sys::cuEventRecord(
                     self.events[i],
                     self.cache_stream.stream,
                 );
@@ -250,7 +250,7 @@ impl CacheEngine {
             //     &self.cache_stream,
             // )?;
             unsafe {
-                candle_core::cuda_backend::cudarc::driver::sys::cuEventRecord(
+                candle::cuda_backend::cudarc::driver::sys::cuEventRecord(
                     self.events[i],
                     self.cache_stream.stream,
                 );

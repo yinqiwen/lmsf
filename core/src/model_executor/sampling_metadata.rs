@@ -1,4 +1,4 @@
-use candle_core::{quantized::QuantizedType, DType, Device, IndexOp, NdArray, Tensor};
+use candle::{quantized::QuantizedType, DType, Device, IndexOp, NdArray, Tensor};
 use std::{collections::HashMap, sync::Arc};
 
 use crate::common::{
@@ -58,7 +58,7 @@ impl SamplingTensors {
         device: &Device,
         dtype: DType,
         tensor_creator: &mut F,
-    ) -> candle_core::Result<(Self, bool, bool, bool)> {
+    ) -> candle::Result<(Self, bool, bool, bool)> {
         let mut prompt_tokens: Vec<Vec<u32>> = Vec::new();
         let mut output_tokens: Vec<Vec<u32>> = Vec::new();
         let mut top_ks: Vec<u32> = Vec::new();
@@ -178,7 +178,7 @@ impl SamplingTensors {
         device: &Device,
         dtype: DType,
         tensor_creator: &mut F,
-    ) -> candle_core::Result<Self> {
+    ) -> candle::Result<Self> {
         let start = std::time::Instant::now();
         let prompt_max_len = prompt_tokens.iter().map(|x| x.len()).max().unwrap();
         let mut prompt_padded_tokens = Vec::new();

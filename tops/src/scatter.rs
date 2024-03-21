@@ -1,6 +1,6 @@
-use candle_core::cuda_backend::cudarc::driver::sys::CUstream;
-use candle_core::shape::Dim;
-use candle_core::{CpuStorage, CudaStorage, DType, Device, Layout, Shape, Tensor};
+use candle::cuda_backend::cudarc::driver::sys::CUstream;
+use candle::shape::Dim;
+use candle::{CpuStorage, CudaStorage, DType, Device, Layout, Shape, Tensor};
 use common::{
     ffi::get_scalar_type,
     ffi::{CTensorView, ScalarType},
@@ -27,7 +27,7 @@ pub fn cuda_scatter<D: Dim>(
     src: &Tensor,
     dim: D,
     stream: CUstream,
-) -> candle_core::Result<()> {
+) -> candle::Result<()> {
     let dim = dim.to_index(dst.shape(), "scatter")?;
     let index_view = common::ffi::CTensorView::from(index, false)?;
     let output_view = common::ffi::CTensorView::from(dst, false)?;
@@ -43,7 +43,7 @@ pub fn cuda_scatter<D: Dim>(
 }
 
 #[test]
-fn test_sort() -> candle_core::Result<()> {
+fn test_sort() -> candle::Result<()> {
     let device = Device::new_cuda(0)?;
     let a = Tensor::new(
         &[

@@ -1,5 +1,5 @@
-use candle_core::cuda_backend::cudarc::driver::sys::CUstream;
-use candle_core::{Device, Tensor, WithDType};
+use candle::cuda_backend::cudarc::driver::sys::CUstream;
+use candle::{Device, Tensor, WithDType};
 use common::{
     ffi::get_scalar_type,
     ffi::{CTensorView, ScalarType},
@@ -29,9 +29,9 @@ pub fn cuda_masked_fill_<D: WithDType>(
     mask: &Tensor,
     scalar_operand: D,
     stream: CUstream,
-) -> candle_core::Result<()> {
+) -> candle::Result<()> {
     if D::DTYPE != t.dtype() {
-        return Err(candle_core::Error::UnexpectedDType {
+        return Err(candle::Error::UnexpectedDType {
             msg: "invalid dtype for given fill value",
             expected: t.dtype(),
             got: D::DTYPE,
@@ -57,29 +57,29 @@ pub fn cuda_masked_fill_<D: WithDType>(
     Ok(())
 }
 
-pub fn cuda_masked_fill_neg_inf_(on_false: &Tensor, mask: &Tensor) -> candle_core::Result<()> {
+pub fn cuda_masked_fill_neg_inf_(on_false: &Tensor, mask: &Tensor) -> candle::Result<()> {
     match on_false.dtype() {
-        candle_core::DType::U8 => cuda_masked_fill_(on_false, mask, 0_u8, std::ptr::null_mut()),
-        candle_core::DType::F16 => cuda_masked_fill_(
+        candle::DType::U8 => cuda_masked_fill_(on_false, mask, 0_u8, std::ptr::null_mut()),
+        candle::DType::F16 => cuda_masked_fill_(
             on_false,
             mask,
             half::f16::NEG_INFINITY,
             std::ptr::null_mut(),
         ),
-        candle_core::DType::F32 => {
+        candle::DType::F32 => {
             cuda_masked_fill_(on_false, mask, f32::NEG_INFINITY, std::ptr::null_mut())
         }
-        candle_core::DType::BF16 => cuda_masked_fill_(
+        candle::DType::BF16 => cuda_masked_fill_(
             on_false,
             mask,
             half::bf16::NEG_INFINITY,
             std::ptr::null_mut(),
         ),
-        candle_core::DType::F64 => {
+        candle::DType::F64 => {
             cuda_masked_fill_(on_false, mask, f64::NEG_INFINITY, std::ptr::null_mut())
         }
         _ => {
-            candle_core::bail!(
+            candle::bail!(
                 "not supported dtype:{:?} for masked_fill_neg_inf",
                 on_false.dtype()
             );
@@ -88,7 +88,7 @@ pub fn cuda_masked_fill_neg_inf_(on_false: &Tensor, mask: &Tensor) -> candle_cor
 }
 
 #[test]
-fn test_masked_fill() -> candle_core::Result<()> {
+fn test_masked_fill() -> candle::Result<()> {
     let device = Device::new_cuda(0)?;
     // let a = cuda_arange(0_u32, 100, &device)?;
     // println!("{}", a.to_string());

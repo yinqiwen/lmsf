@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use candle_core::Tensor;
+use candle::Tensor;
 use common::{cuda_ext::get_tensor_cuda_device_ptr, ffi::get_scalar_type, ffi::ScalarType};
 use libc::c_void;
 
@@ -48,7 +48,7 @@ pub fn apply_copy_blocks(
     key_caches: Vec<&mut Tensor>,
     value_caches: Vec<&mut Tensor>,
     block_mapping: &HashMap<usize, Vec<usize>>,
-) -> candle_core::Result<()> {
+) -> candle::Result<()> {
     let num_layers = key_caches.len();
     let mut key_ptrs = Vec::with_capacity(num_layers);
     let mut value_ptrs = Vec::with_capacity(num_layers);
@@ -102,7 +102,7 @@ pub fn apply_reshape_and_cache(
     key_cache: &Tensor,
     value_cache: &Tensor,
     slot_mapping: &Tensor,
-) -> candle_core::Result<()> {
+) -> candle::Result<()> {
     let num_tokens = key.shape().dims()[0];
     let num_heads = key.shape().dims()[1];
     let head_size = key.shape().dims()[2];

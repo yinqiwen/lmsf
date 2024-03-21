@@ -1,11 +1,11 @@
 //use candle-rotary instead
 
-use candle_core::cuda_backend::cudarc::driver::{DevicePtr, DeviceRepr};
-use candle_core::{cuda_backend::cudarc::driver::sys::CUstream, DType, Device, Tensor, D};
+use candle::cuda_backend::cudarc::driver::{DevicePtr, DeviceRepr};
+use candle::{cuda_backend::cudarc::driver::sys::CUstream, DType, Device, Tensor, D};
 use common::{cuda_ext::get_tensor_cuda_device_ptr, ffi::get_scalar_type, ffi::ScalarType};
 use libc::c_void;
 
-fn compute_inv_freq(base: f32, rotary_dim: usize, device: &Device) -> candle_core::Result<Tensor> {
+fn compute_inv_freq(base: f32, rotary_dim: usize, device: &Device) -> candle::Result<Tensor> {
     let inv_freq: Vec<_> = (0..rotary_dim as u32)
         .step_by(2)
         .map(|i| 1f32 / base.powf(i as f32 / rotary_dim as f32))
@@ -20,7 +20,7 @@ pub fn compute_cos_sin_cache(
     max_position_embeddings: usize,
     dtype: DType,
     device: &Device,
-) -> candle_core::Result<Tensor> {
+) -> candle::Result<Tensor> {
     let inv_freq = compute_inv_freq(base, rotary_dim, device)?;
     let t = Tensor::arange(0u32, max_position_embeddings as u32, inv_freq.device())?
         .to_dtype(DType::F32)?
@@ -36,7 +36,7 @@ pub fn compute_cos_sin_cache(
 }
 
 #[test]
-fn test_compute_inv_freq() -> candle_core::Result<()> {
+fn test_compute_inv_freq() -> candle::Result<()> {
     let device = Device::new_cuda(0)?;
     let a = compute_inv_freq(10000.0, 4096, &device)?;
 
@@ -46,7 +46,7 @@ fn test_compute_inv_freq() -> candle_core::Result<()> {
 }
 
 #[test]
-fn test_compute_cos_sin_cache() -> candle_core::Result<()> {
+fn test_compute_cos_sin_cache() -> candle::Result<()> {
     let device = Device::new_cuda(0)?;
     let a = compute_cos_sin_cache(10000.0, 32, 4096, DType::F16, &device)?;
 
@@ -87,7 +87,7 @@ pub fn apply_rotary_embedding(
     cos_sin_cache: &Tensor,
     head_size: usize,
     is_neox: bool,
-) -> candle_core::Result<()> {
+) -> candle::Result<()> {
     //   int64_t num_tokens = query.numel() / query.size(-1);
     //   int rot_dim = cos_sin_cache.size(1);
     //   int num_heads = query.size(-1) / head_size;
