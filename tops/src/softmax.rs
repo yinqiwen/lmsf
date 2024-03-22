@@ -1,15 +1,14 @@
 use candle::cuda_backend::cudarc::driver::sys::CUstream;
-use candle::{shape::Dim, CpuStorage, CudaStorage, DType, Device, Layout, Shape, Tensor};
+use candle::{shape::Dim, Tensor};
 use common::{
-    ffi::get_scalar_type,
-    ffi::{CTensorView, ScalarType},
+    ffi::{CTensorView},
 };
 use common::{DefaultTensorCreator, TensorCreator};
 
-use std::os::raw::{c_int, c_void};
+use std::os::raw::{c_int};
 
-use crate::common::get_column_major_dim;
-use crate::unsafe_tensor_dtod_copy;
+
+
 
 extern "C" {
     fn cuda_softmax_tensor(input: CTensorView, algo: c_int, stream: CUstream, output: CTensorView);
@@ -21,7 +20,7 @@ pub fn cuda_softmax<D: Dim>(intput: &Tensor, dim: D, stream: CUstream) -> candle
 }
 pub fn cuda_softmax_<F: TensorCreator, D: Dim>(
     input: &Tensor,
-    dim: D,
+    _dim: D,
     tensor_creator: &mut F,
     stream: CUstream,
 ) -> candle::Result<Tensor> {
@@ -46,7 +45,7 @@ pub fn cuda_log_softmax<D: Dim>(
 }
 pub fn cuda_log_softmax_<F: TensorCreator, D: Dim>(
     input: &Tensor,
-    dim: D,
+    _dim: D,
     tensor_creator: &mut F,
     stream: CUstream,
 ) -> candle::Result<Tensor> {

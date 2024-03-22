@@ -1,12 +1,9 @@
-use std::sync::Arc;
-
-use candle::{CudaDevice, DType, Device, Tensor, D};
+use candle::{DType, Device, Tensor};
 use candle::{IndexOp, Shape};
-use candle_nn::Module;
+
 use candle_nn::VarBuilder;
 use common::{DefaultTensorCreator, TensorCreator};
 use std::collections::HashMap;
-use std::rc::Rc;
 
 use crate::model_executor::parallel::ParallelState;
 use crate::tensor::cuda_copy;
@@ -52,7 +49,7 @@ impl LinearWeights for UnquantizedLinearWeights {
     type Config = Option<String>;
     fn from(
         mut weights: HashMap<&'static str, Tensor>,
-        config: Option<String>,
+        _config: Option<String>,
     ) -> candle::Result<Self> {
         if let Some(weight) = weights.remove("weight") {
             let bias = weights.remove("bias");
@@ -77,7 +74,7 @@ impl LinearWeights for UnquantizedLinearWeights {
         input_size: usize,
         output_size: usize,
         params_dtype: DType,
-        config: &Option<String>,
+        _config: &Option<String>,
     ) -> Vec<WeightRegistry> {
         let shape = Shape::from_dims(&[output_size, input_size]);
         let attrs = HashMap::from([("input_dim", 1_usize), ("output_dim", 0)]);
@@ -207,7 +204,7 @@ impl<W: LinearWeights> ColumnParallelLinear<W> {
                 drop(loaded_weight);
             }
         }
-        cuda_dev.synchronize();
+        let _ = cuda_dev.synchronize();
         Ok(())
     }
     pub fn merge_load(
@@ -218,9 +215,9 @@ impl<W: LinearWeights> ColumnParallelLinear<W> {
         parallel_state: &ParallelState,
         config: W::Config,
     ) -> candle::Result<Self> {
-        let init_ws = candle_nn::init::DEFAULT_KAIMING_NORMAL;
+        let _init_ws = candle_nn::init::DEFAULT_KAIMING_NORMAL;
         if prefixes.len() != out_sizes.len() {
-            return candle::bail!("expected same len with out_dims & prefixes");
+            candle::bail!("expected same len with out_dims & prefixes");
         }
         let sum_out_sizes: usize = out_sizes.iter().sum();
 
@@ -233,7 +230,7 @@ impl<W: LinearWeights> ColumnParallelLinear<W> {
         }
 
         let mut merges_regs = Vec::new();
-        for (i, prefix) in prefixes.iter().enumerate() {
+        for (i, _prefix) in prefixes.iter().enumerate() {
             let regs = W::get_descs(in_size, out_sizes[i], vb.dtype(), &config);
             let mut reg_map = HashMap::new();
             for reg in regs {
@@ -243,7 +240,7 @@ impl<W: LinearWeights> ColumnParallelLinear<W> {
         }
 
         let mut shard_id: usize = 0;
-        for (i, (output_size, prefix)) in out_sizes.iter().zip(prefixes.iter()).enumerate() {
+        for (i, (_output_size, prefix)) in out_sizes.iter().zip(prefixes.iter()).enumerate() {
             for reg in &regs {
                 let param = loaded_weights.get(reg.name).unwrap();
                 let act_reg = merges_regs[i].get(reg.name).unwrap();
@@ -275,7 +272,7 @@ impl<W: LinearWeights> ColumnParallelLinear<W> {
         loaded_weight: Tensor,
         parallel_state: &ParallelState,
     ) -> candle::Result<Tensor> {
-        let init_ws = candle_nn::init::DEFAULT_KAIMING_NORMAL;
+        let _init_ws = candle_nn::init::DEFAULT_KAIMING_NORMAL;
         let tp_rank = parallel_state.get_tensor_model_parallel_rank();
         if let Some(output_dim) = tensor_reg.getattr("output_dim") {
             if parallel_state.get_tensor_model_parallel_world_size() == 1 {
@@ -302,7 +299,7 @@ impl<W: LinearWeights> ColumnParallelLinear<W> {
 
                 cuda_copy(&t, &narrow_loaded_weight)?;
                 drop(narrow_loaded_weight);
-                cuda_dev.synchronize();
+                let _ = cuda_dev.synchronize();
                 Ok(t)
             }
         } else {
@@ -317,7 +314,7 @@ impl<W: LinearWeights> ColumnParallelLinear<W> {
         config: W::Config,
     ) -> candle::Result<Self> {
         let regs = W::get_descs(in_dim, out_dim, vb.dtype(), &config);
-        let init_ws = candle_nn::init::DEFAULT_KAIMING_NORMAL;
+        let _init_ws = candle_nn::init::DEFAULT_KAIMING_NORMAL;
         let mut loaded_weights = HashMap::new();
         for reg in &regs {
             let loaded_weight = vb.get_with_hints_dtype(
@@ -385,7 +382,7 @@ impl<W: LinearWeights> QKVParallelLinear<W> {
 
                 let param_data = param.narrow(output_dim, shard_offset, shard_size)?;
 
-                let start_idx = shard_id * shard_size;
+                let _start_idx = shard_id * shard_size;
                 //let loaded_weight = loaded_weight.narrow(output_dim, start_idx, shard_size)?;
                 (param_data, loaded_weight)
             } else {
@@ -462,7 +459,7 @@ impl<W: LinearWeights> QKVParallelLinear<W> {
                 candle::bail!("unexpected!")
             }
         };
-        cuda_dev.synchronize();
+        let _ = cuda_dev.synchronize();
         Ok(())
     }
     pub fn load(
@@ -475,9 +472,9 @@ impl<W: LinearWeights> QKVParallelLinear<W> {
         parallel_state: &ParallelState,
         config: W::Config,
     ) -> candle::Result<Self> {
-        let init_ws = candle_nn::init::DEFAULT_KAIMING_NORMAL;
+        let _init_ws = candle_nn::init::DEFAULT_KAIMING_NORMAL;
         if prefixes.len() != 3 {
-            return candle::bail!("expected 3 prefixes for qkv");
+            candle::bail!("expected 3 prefixes for qkv")
         }
         let total_num_kv_heads = if let Some(total_num_kv_heads) = total_num_kv_heads {
             total_num_kv_heads
@@ -513,7 +510,7 @@ impl<W: LinearWeights> QKVParallelLinear<W> {
             shard_offsets,
         };
 
-        let mut qkv_sizes = [
+        let qkv_sizes = [
             meta.total_num_heads * meta.head_size,
             meta.total_num_kv_heads * meta.head_size,
             meta.total_num_kv_heads * meta.head_size,
@@ -528,7 +525,7 @@ impl<W: LinearWeights> QKVParallelLinear<W> {
         }
 
         let mut qkv_regs = Vec::new();
-        for (i, prefix) in prefixes.iter().enumerate() {
+        for (i, _prefix) in prefixes.iter().enumerate() {
             let regs = W::get_descs(input_size, qkv_sizes[i], vb.dtype(), &config);
             let mut reg_map = HashMap::new();
             for reg in regs {
@@ -608,9 +605,9 @@ impl Linear {
         let first_tensor =
             vb.pp(prefixes[0])
                 .get_with_hints((out_dim, in_dim), "weight", init_ws)?;
-        let mut weight = Tensor::zeros((out_dim * 2, in_dim), vb.dtype(), vb.device())?;
+        let weight = Tensor::zeros((out_dim * 2, in_dim), vb.dtype(), vb.device())?;
 
-        cuda_copy(&weight, &first_tensor);
+        cuda_copy(&weight, &first_tensor)?;
         drop(first_tensor);
         for (i, prefix) in prefixes.into_iter().enumerate() {
             if i > 0 {
@@ -618,7 +615,7 @@ impl Linear {
                     .pp(prefix)
                     .get_with_hints((out_dim, in_dim), "weight", init_ws)?;
                 let next_w = weight.i((i * out_dim.., ..))?;
-                cuda_copy(&next_w, &t);
+                cuda_copy(&next_w, &t)?;
 
                 drop(t);
             }
@@ -733,13 +730,13 @@ impl QKVLinear {
         v_name: &str,
     ) -> candle::Result<Self> {
         let init_ws = candle_nn::init::DEFAULT_KAIMING_NORMAL;
-        let cuda_dev = match vb.device() {
+        let _cuda_dev = match vb.device() {
             Device::Cuda(c) => c,
             _ => {
                 candle::bail!("unexpected!")
             }
         };
-        let mut weight = Tensor::zeros(
+        let weight = Tensor::zeros(
             (q_out_dim + k_out_dim + v_out_dim, in_dim),
             vb.dtype(),
             vb.device(),
@@ -747,7 +744,7 @@ impl QKVLinear {
         let q_tensor = vb
             .pp(q_name)
             .get_with_hints((q_out_dim, in_dim), "weight", init_ws)?;
-        cuda_copy(&weight, &q_tensor);
+        cuda_copy(&weight, &q_tensor)?;
         drop(q_tensor);
 
         let k_tensor = vb
@@ -755,14 +752,14 @@ impl QKVLinear {
             .get_with_hints((k_out_dim, in_dim), "weight", init_ws)?;
         let k_view = weight.i((q_out_dim.., ..))?;
         //tops::unsafe_tensor_dtod_copy(&k_view, &k_tensor)?;
-        cuda_copy(&k_view, &k_tensor);
+        cuda_copy(&k_view, &k_tensor)?;
         drop(k_tensor);
 
         let v_tensor = vb
             .pp(v_name)
             .get_with_hints((v_out_dim, in_dim), "weight", init_ws)?;
         let v_view = weight.i((q_out_dim + k_out_dim.., ..))?;
-        cuda_copy(&v_view, &v_tensor);
+        cuda_copy(&v_view, &v_tensor)?;
         drop(v_tensor);
 
         // cuda_dev.synchronize();

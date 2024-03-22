@@ -1,11 +1,11 @@
 use candle::cuda_backend::cudarc::driver::sys::CUstream;
-use candle::Module;
-use candle::{Device, Shape, Tensor};
-use common::ffi::{CShapeView, CTensorView};
-use common::{DefaultTensorCreator, TensorCreator};
-use libc::c_float;
 
-use std::os::raw::{c_int, c_void};
+use candle::{Tensor};
+use common::ffi::{CTensorView};
+
+
+
+use std::os::raw::{c_int};
 
 extern "C" {
     fn fastertransformer_silu_activation(

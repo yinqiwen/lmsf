@@ -1,21 +1,17 @@
-use candle::{DType, Device, IndexOp, Result, Tensor, D};
+use candle::{IndexOp, Result, Tensor};
 use candle_nn::{Module, VarBuilder};
 // use candle_transformers::models::with_tracing::{linear_no_bias as linear, Linear};
-use serde::Deserialize;
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
 
 use super::LlamaConfig as Config;
 use crate::model_executor::input_metadata::InputMetadata;
 use crate::model_executor::layers::{Cache, Layer};
 use crate::model_executor::layers::{
-    ColumnParallelLinear, LinearWeights, PagedAttention, QKVLinear, QKVParallelLinear,
-    RotaryEmbedding,
+    ColumnParallelLinear, LinearWeights, PagedAttention, QKVParallelLinear, RotaryEmbedding,
 };
 use crate::model_executor::layers::{Embedding, UnquantizedLinearWeights};
 use crate::model_executor::models::Model;
 use crate::model_executor::parallel::ParallelState;
-use crate::tensor::{cuda_add_, TensorArena};
+use crate::tensor::TensorArena;
 use common::{DefaultTensorCreator, TensorCreator};
 
 pub const MAX_SEQ_LEN: usize = 4096;
@@ -135,7 +131,7 @@ struct CausalSelfAttention<W: LinearWeights> {
     rotary_emb: RotaryEmbedding,
     span: tracing::Span,
     span_rot: tracing::Span,
-    t: Option<W>,
+    // t: Option<W>,
 }
 
 // #[cfg(feature = "flash-attn")]
@@ -243,7 +239,7 @@ impl<W: LinearWeights> CausalSelfAttention<W> {
 
     fn load(
         vb: VarBuilder,
-        cache: &Cache,
+        _cache: &Cache,
         cfg: &Config,
         parallel_state: &ParallelState,
         config: W::Config,
@@ -252,7 +248,7 @@ impl<W: LinearWeights> CausalSelfAttention<W> {
         let span_rot = tracing::span!(tracing::Level::TRACE, "attn-rot");
         let size_in = cfg.hidden_size;
         let size_q = (cfg.hidden_size / cfg.num_attention_heads) * cfg.num_attention_heads;
-        let size_kv = (cfg.hidden_size / cfg.num_attention_heads) * cfg.num_key_value_heads;
+        let _size_kv = (cfg.hidden_size / cfg.num_attention_heads) * cfg.num_key_value_heads;
 
         let head_size = cfg.hidden_size / cfg.num_attention_heads;
         let qkv_proj = QKVParallelLinear::<W>::load(
@@ -308,7 +304,7 @@ impl<W: LinearWeights> CausalSelfAttention<W> {
             )?,
             span,
             span_rot,
-            t: None,
+            // t: None,
         })
     }
 }
@@ -328,7 +324,7 @@ struct Mlp<W: LinearWeights> {
     gate_up: ColumnParallelLinear<W>,
     c_proj: ColumnParallelLinear<W>,
     span: tracing::Span,
-    t: Option<W>,
+    // t: Option<W>,
 }
 
 impl<W: LinearWeights> Mlp<W> {
@@ -400,7 +396,6 @@ impl<W: LinearWeights> Mlp<W> {
             gate_up,
             c_proj,
             span,
-            t: None,
         })
     }
 }
@@ -418,7 +413,7 @@ impl<W: LinearWeights> Block<W> {
     fn forward_<F: TensorCreator>(
         &self,
         tensor_creator: &mut F,
-        mut hidden_states: Tensor,
+        hidden_states: Tensor,
         positions: &Tensor,
         residual: Option<Tensor>,
         cache: Option<(&Tensor, &Tensor)>,
@@ -472,7 +467,7 @@ impl<W: LinearWeights> Block<W> {
     }
     fn forward(
         &self,
-        mut hidden_states: Tensor,
+        hidden_states: Tensor,
         positions: &Tensor,
         residual: Option<Tensor>,
         cache: Option<(&Tensor, &Tensor)>,
@@ -576,7 +571,7 @@ impl<W: LinearWeights> Llama<W> {
         // tracing::info!("wte cost {:?}", start.elapsed(),);
         // tracing::info!("wte:{}", x.to_string());
         let mut residual: Option<Tensor> = None;
-        let start = std::time::Instant::now();
+        let _start = std::time::Instant::now();
 
         if let Some(kv_caches) = kv_caches {
             for (idx, block) in self.blocks.iter().enumerate() {

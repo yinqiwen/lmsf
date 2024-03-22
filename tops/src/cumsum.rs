@@ -1,15 +1,14 @@
 use candle::cuda_backend::cudarc::driver::sys::CUstream;
 use candle::shape::Dim;
-use candle::{CpuStorage, CudaStorage, DType, Device, Layout, Shape, Tensor};
+use candle::{Tensor};
 use common::{
-    ffi::get_scalar_type,
-    ffi::{CTensorView, ScalarType},
+    ffi::{CTensorView},
 };
 use common::{DefaultTensorCreator, TensorCreator};
 
-use std::os::raw::{c_uint, c_void};
+use std::os::raw::{c_uint};
 
-use crate::common::get_column_major_dim;
+
 
 extern "C" {
     fn cuda_cumsum_tensor(input: CTensorView, dim: c_uint, stream: CUstream, output: CTensorView);

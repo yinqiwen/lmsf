@@ -1,9 +1,5 @@
 use anyhow::{Context, Result};
 use cmake::Config;
-use rayon::prelude::*;
-use std::path::{Path, PathBuf};
-use std::str::FromStr;
-use std::time::SystemTime;
 
 #[allow(unused)]
 fn compute_cap() -> Result<usize> {

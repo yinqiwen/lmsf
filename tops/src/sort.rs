@@ -1,25 +1,17 @@
 use candle::cuda_backend::cudarc::driver::sys::CUstream;
-use candle::{CpuStorage, CudaStorage, DType, Device, Layout, Shape, Tensor};
-use common::{
-    ffi::get_scalar_type,
-    ffi::{CTensorView, ScalarType},
-};
+use candle::{DType, Tensor};
+use common::ffi::CTensorView;
 use common::{DefaultTensorCreator, TensorCreator};
 
-use std::os::raw::{c_uint, c_void};
-
-use crate::common::get_column_major_dim;
-use crate::unsafe_tensor_dtod_copy;
-
 extern "C" {
-    fn cuda_sort_tensor(
-        input: CTensorView,
-        dim: c_uint,
-        ascend: bool,
-        stream: CUstream,
-        output: CTensorView,
-        indices: CTensorView,
-    );
+    // fn cuda_sort_tensor(
+    //     input: CTensorView,
+    //     dim: c_uint,
+    //     ascend: bool,
+    //     stream: CUstream,
+    //     output: CTensorView,
+    //     indices: CTensorView,
+    // );
 
     fn cuda_argsort_tensor(
         input: CTensorView,
@@ -28,13 +20,13 @@ extern "C" {
         stream: CUstream,
     );
 
-    fn cuda_dim_gather_tensor(
-        input: CTensorView,
-        dim: c_uint,
-        indices: CTensorView,
-        stream: CUstream,
-        output: CTensorView,
-    );
+    // fn cuda_dim_gather_tensor(
+    //     input: CTensorView,
+    //     dim: c_uint,
+    //     indices: CTensorView,
+    //     stream: CUstream,
+    //     output: CTensorView,
+    // );
 }
 pub fn cuda_sort2(
     t: Tensor,
@@ -71,14 +63,6 @@ fn cuda_sort2_<F: TensorCreator>(
         Ok((output, indices))
     } else {
         unimplemented!("Unsupported non last dim sort")
-        //let input = t.transpose(dim1, dim2)
-        //     std::shared_ptr<std::vector<int32_t>> perm =
-        //       JUST(GetPermWhenTransposeAxisToLastDim(input->ndim(), dim));
-        //   auto x = JUST(Transpose(input, *perm));
-        //   auto indices_temp = JUST(ArgSort(x, direction));
-        //   auto inversed_perm = JUST(GetInversedPerm(*perm));
-        //   indices = JUST(Transpose(indices_temp, *inversed_perm));
-        //   values = JUST(DimGather(input, axis, indices, false));
     }
 }
 
@@ -126,6 +110,7 @@ pub fn cuda_sort_<F: TensorCreator>(
 
 #[test]
 fn test_sort() -> candle::Result<()> {
+    use candle::Device;
     let device = Device::new_cuda(0)?;
     let a = Tensor::new(
         &[

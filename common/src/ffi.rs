@@ -20,46 +20,45 @@ pub struct CTensorView {
 #[derive(Debug)]
 #[repr(C)]
 pub enum ScalarType {
-    DATA_U8 = 0,
-    DATA_F16,
-    DATA_BF16,
-    DATA_F32,
-    DATA_F64,
-    DATA_U32,
-    DATA_I64,
+    DataU8 = 0,
+    DataF16,
+    DataBF16,
+    DataF32,
+    DataF64,
+    DataU32,
+    DataI64,
 
-    DATA_UNSUPPORTED = 100,
+    DataUnsupported = 100,
 }
 
 #[repr(C)]
 pub enum TopkType {
-    AF_TOPK_MIN = 1,
+    AfTopkMin = 1,
     ///< Top k min values
-    AF_TOPK_MAX = 2,
+    AfTopkMax = 2,
     ///< Top k max values
-    AF_TOPK_STABLE = 4,
+    AfTopkStable = 4,
     ///< Preserve order of indices for equal values
-    AF_TOPK_STABLE_MIN = 5,
+    AfTopkStableMin = 5,
     ///< Top k min with stable indices
-    AF_TOPK_STABLE_MAX = 6,
+    AfTopkStableMax = 6,
     ///< Top k max with stable indices
-    AF_TOPK_DEFAULT = 0, // Default option (max)
+    AfTopkDefault = 0, // Default option (max)
 }
 
-use candle::{cuda_backend::cudarc::driver::DeviceRepr, DType, Shape, Tensor};
+use candle::{DType, Shape, Tensor};
 
 use crate::cuda_ext::get_tensor_cuda_device_ptr;
 
 pub fn get_scalar_type(dtype: DType) -> ScalarType {
     match dtype {
-        DType::BF16 => ScalarType::DATA_BF16,
-        DType::U8 => ScalarType::DATA_U8,
-        DType::U32 => ScalarType::DATA_U32,
-        DType::I64 => ScalarType::DATA_I64,
-        DType::F16 => ScalarType::DATA_F16,
-        DType::F32 => ScalarType::DATA_F32,
-        DType::F64 => ScalarType::DATA_F64,
-        _ => ScalarType::DATA_UNSUPPORTED,
+        DType::BF16 => ScalarType::DataBF16,
+        DType::U8 => ScalarType::DataU8,
+        DType::U32 => ScalarType::DataU32,
+        DType::I64 => ScalarType::DataI64,
+        DType::F16 => ScalarType::DataF16,
+        DType::F32 => ScalarType::DataF32,
+        DType::F64 => ScalarType::DataF64,
     }
 }
 

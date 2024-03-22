@@ -1,21 +1,8 @@
-use crate::model_executor::{
-    layers::{
-        quantization::{AWQConfig, AWQLinearWeights, QuantizationConfig},
-        Cache,
-    },
-    parallel::ParallelState,
-};
 use anyhow::anyhow;
-use candle::{
-    quantized::gguf_file::{self, VersionedMagic},
-    Device,
-};
+use candle::Device;
 use std::{
     collections::{HashMap, HashSet},
-    fs::{read_to_string, File},
-    path::{Path, PathBuf},
     str::FromStr,
-    time::Instant,
 };
 use strum_macros::{Display, EnumString};
 
@@ -23,8 +10,15 @@ use super::{
     model::{Model, ModelConfig},
     template::ChatTemplate,
 };
-use crate::model_executor::layers::{quantization, LinearWeights, UnquantizedLinearWeights};
-use crate::model_executor::models::llama::{self, Llama, LlamaConfig};
+use crate::model_executor::layers::UnquantizedLinearWeights;
+use crate::model_executor::models::llama::{Llama, LlamaConfig};
+use crate::model_executor::{
+    layers::{
+        quantization::{AWQConfig, AWQLinearWeights, QuantizationConfig},
+        Cache,
+    },
+    parallel::ParallelState,
+};
 
 use clap::ValueEnum;
 
@@ -143,7 +137,7 @@ impl ModelFactory {
                     panic!("Not supported model format:{:?}", model_weight_files)
                 }
             };
-            let dtype = cfg.get_dtype()?;
+            let _dtype = cfg.get_dtype()?;
             let cfg_any = cfg.as_any();
             let llama_cfg = match cfg_any.downcast_ref::<LlamaConfig>() {
                 Some(b) => b,
@@ -233,7 +227,6 @@ impl ModelFactory {
                   //     Ok(Box::new(model))
                   // }
             },
-            _ => Err(anyhow!("invalid model_type:{:?}", cfg.get_model_type())),
         }
     }
     pub fn new_model_config(
@@ -286,7 +279,6 @@ impl ModelFactory {
                   //     Ok(Box::new(llama_cfg))
                   // }
             },
-            _ => Err(anyhow!("invalid model_type:{:?}", model_type)),
         }
     }
     pub fn get_chat_template(model_path: &str) -> anyhow::Result<Option<ChatTemplate>> {

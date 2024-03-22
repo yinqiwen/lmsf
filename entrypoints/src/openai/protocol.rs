@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::SystemTime;
 
+#[allow(dead_code)]
 #[derive(Serialize)]
 pub enum ErrorType {
     Unhealthy,

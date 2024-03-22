@@ -2,7 +2,6 @@ use std::sync::atomic::AtomicUsize;
 
 use candle::{DType, Device, IndexOp, Shape, Tensor};
 use common::TensorCreator;
-use metrics::atomics::AtomicU64;
 
 const DEFAULT_MIN_BLOCK_SIZE: usize = 1024 * 1024;
 const ALLIGNMENT: usize = 64;
@@ -41,11 +40,11 @@ impl TensorArenaUnit {
         let allign_n = (n + ALLIGNMENT - 1) / ALLIGNMENT * ALLIGNMENT;
         let curosr = self.curosr.load(std::sync::atomic::Ordering::SeqCst);
         if curosr + allign_n > self.capacity {
-            return candle::bail!(
+            candle::bail!(
                 "arena buffer overflow with requestd:{}, while rest:{}",
                 allign_n,
                 self.capacity - curosr
-            );
+            )
         }
         // println!("cursor:{}, n:{}", curosr, n);
         let t = self.cache.i(curosr..curosr + n)?.reshape(shape.clone())?;
@@ -58,6 +57,7 @@ impl TensorArenaUnit {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 struct TensorArenaUnitGroup {
     group: Vec<TensorArenaUnit>,
@@ -156,6 +156,7 @@ impl TensorArenaUnitGroup {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct TensorArena {
     cache: Vec<TensorArenaUnitGroup>,
@@ -213,7 +214,7 @@ impl TensorArena {
         zero: bool,
     ) -> candle::Result<Tensor> {
         let idx = dtype as usize;
-        let cache = &self.cache[idx];
+        let _cache = &self.cache[idx];
         self.cache[idx].get(dtype, shape, zero, &self.device)
     }
 }
@@ -242,13 +243,13 @@ fn test_arena() -> candle::Result<()> {
     let device = Device::new_cuda(0)?;
     let mut arena = TensorArena::new(&device);
 
-    let t1 = arena.get(DType::F16, (1, 32000), false)?;
-    let t1 = arena.get(DType::F16, (1, 32000), false)?;
+    let _t1 = arena.get(DType::F16, (1, 32000), false)?;
+    let _t1 = arena.get(DType::F16, (1, 32000), false)?;
     arena.reset();
     arena.print_stat();
 
-    let t1 = arena.get(DType::F16, (1, 32000), false)?;
-    let t1 = arena.get(DType::F16, (1, 32000), false)?;
+    let _t1 = arena.get(DType::F16, (1, 32000), false)?;
+    let _t1 = arena.get(DType::F16, (1, 32000), false)?;
     arena.reset();
     arena.print_stat();
     Ok(())

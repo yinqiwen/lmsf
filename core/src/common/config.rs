@@ -1,8 +1,6 @@
-use std::collections::{HashMap, HashSet};
-
 use anyhow::{anyhow, Result};
 use candle::DType;
-use clap::{Parser, ValueEnum};
+use clap::Parser;
 
 use crate::model_executor::models::{
     ModelConfig as PretrainedModelConfig, ModelFactory, ModelType, QuantizeType,
@@ -248,7 +246,7 @@ impl CacheConfig {
         })
     }
 
-    pub fn verify_with_parallel_config(&self, parallel_config: &ParallelConfig) -> Result<()> {
+    pub fn verify_with_parallel_config(&self, _parallel_config: &ParallelConfig) -> Result<()> {
         //total_cpu_memory = get_cpu_memory();
 
         // let num_gpus_per_node = parallel_config.tensor_parallel_size;

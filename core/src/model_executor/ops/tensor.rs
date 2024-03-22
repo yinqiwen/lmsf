@@ -1,6 +1,5 @@
 use anyhow::Result;
-use candle::{scalar::TensorOrScalar, Device, Tensor, WithDType};
-use candle_transformers::models::bert::DTYPE;
+use candle::{Device, Tensor, WithDType};
 
 fn pad_to_max<D: WithDType>(mut x: Vec<D>, max_len: usize, pad: D) -> Vec<D> {
     assert!(x.len() <= max_len);
@@ -21,16 +20,16 @@ pub fn make_tensor_with_pad<D: WithDType>(
     Ok(tensor)
 }
 
-pub fn masked_fill<D: WithDType>(
-    on_false: &Tensor,
-    mask: &Tensor,
-    on_true: D,
-) -> candle::Result<Tensor> {
-    let shape = mask.shape();
-    let on_true = Tensor::new(on_true, on_false.device())?.broadcast_as(shape.dims())?;
-    let m = mask.where_cond(&on_true, on_false)?;
-    Ok(m)
-}
+// pub fn masked_fill<D: WithDType>(
+//     on_false: &Tensor,
+//     mask: &Tensor,
+//     on_true: D,
+// ) -> candle::Result<Tensor> {
+//     let shape = mask.shape();
+//     let on_true = Tensor::new(on_true, on_false.device())?.broadcast_as(shape.dims())?;
+//     let m = mask.where_cond(&on_true, on_false)?;
+//     Ok(m)
+// }
 
 pub fn masked_fill_neg_inf(on_false: &Tensor, mask: &Tensor) -> candle::Result<Tensor> {
     let shape = mask.shape();

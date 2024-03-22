@@ -1,10 +1,7 @@
-use candle::cuda_backend::cudarc::driver::{DevicePtr, DeviceRepr, LaunchAsync};
+use candle::cuda_backend::cudarc::driver::LaunchAsync;
 use candle::cuda_backend::WrapErr;
-use candle::{
-    backend::BackendStorage, cuda_backend::cudarc::driver::LaunchConfig, shape::Dim, CpuStorage,
-    CudaStorage, DType, Layout, Shape, Storage,
-};
-use candle::{Device, IndexOp, Tensor};
+use candle::{cuda_backend::cudarc::driver::LaunchConfig, DType};
+use candle::{Device, Tensor};
 use common::cuda_ext::get_tensor_cuda_device_ptr;
 
 fn kernel_name(root: &str, dtype: DType) -> String {
@@ -60,7 +57,7 @@ pub fn cuda_tensor_ones(t: &Tensor) -> candle::Result<()> {
 #[test]
 fn test_cast() -> candle::Result<()> {
     let device = Device::new_cuda(0)?;
-    let src = Tensor::ones((5), DType::U8, &device)?;
+    let src = Tensor::ones(5, DType::U8, &device)?;
     //src.to_dtype(dtype)
     let dst = src.to_dtype(DType::U32)?;
     println!("dst:{}", dst.to_string());
@@ -69,6 +66,7 @@ fn test_cast() -> candle::Result<()> {
 
 #[test]
 fn test_ones() -> candle::Result<()> {
+    use candle::IndexOp;
     let device = Device::new_cuda(0)?;
     let src = Tensor::zeros(8, DType::F16, &device)?;
     let src1 = src.i(4..)?;

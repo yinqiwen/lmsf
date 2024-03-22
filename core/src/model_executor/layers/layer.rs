@@ -1,12 +1,12 @@
-use std::collections::HashMap;
 
-use candle::{DType, Tensor};
-use candle_nn::VarBuilder;
+
+use candle::{Tensor};
+
 use common::{DefaultTensorCreator, TensorCreator};
 
-use crate::model_executor::parallel::ParallelState;
 
-use super::WeightRegistry;
+
+
 
 pub type WeightDesc = (&'static str, usize, usize);
 pub trait Layer: Sized {

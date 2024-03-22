@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 pub struct ParallelState {
     tensor_model_parallel_size: usize,
     pipeline_model_parallel_size: usize,
@@ -18,6 +19,7 @@ impl ParallelState {
     pub fn get_tensor_model_parallel_world_size(&self) -> usize {
         self.tensor_model_parallel_size
     }
+    #[allow(dead_code)]
     pub fn get_pipeline_model_parallel_size(&self) -> usize {
         self.pipeline_model_parallel_size
     }

@@ -1,4 +1,4 @@
-use tokenizers::{Decoder, Tokenizer};
+use tokenizers::Tokenizer;
 
 pub struct DecodeTokenOptions {
     pub prefix_offset: usize,
@@ -87,7 +87,7 @@ pub fn detokenize_incrementally(
     let new_token_id = *all_input_ids.last().unwrap();
     let mut prev_tokens_cache = Vec::new();
     let (mut output_tokens, new_tokens, prefix_offset, read_offset) =
-        if let Some(prev_tokens) = prev_tokens {
+        if let Some(_prev_tokens) = prev_tokens {
             let output_tokens = prev_tokens_cache.iter().collect::<Vec<_>>();
             let new_tokens = tokenizer
                 .decode(&[new_token_id], options.skip_special_tokens)
@@ -109,7 +109,7 @@ pub fn detokenize_incrementally(
                 }
             }
             let output_tokens = prev_tokens_cache.iter().collect::<Vec<_>>();
-            let new_tokens = tokenizer
+            let _new_tokens = tokenizer
                 .decode(all_input_ids, options.skip_special_tokens)
                 .map_err(|e| anyhow::anyhow!("{}", e))?;
             let prefix_offset = if output_tokens.len() > 6 {
@@ -139,8 +139,8 @@ pub fn detokenize_incrementally(
         output_tokens,
         new_tokens
     );
-    let prefix_text_tokens = &output_tokens[prefix_offset..read_offset];
-    let new_text_tokens = &output_tokens[prefix_offset..];
+    let _prefix_text_tokens = &output_tokens[prefix_offset..read_offset];
+    let _new_text_tokens = &output_tokens[prefix_offset..];
     let mut new_text: String = String::new();
     let prefix_text: String = String::new();
     //tokenizer.get_decoder().as_ref().unwrap().decode(tokens)

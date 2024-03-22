@@ -1,12 +1,11 @@
-use candle::cuda_backend::cudarc::driver::{DevicePtr, DeviceRepr, LaunchAsync};
 use candle::cuda_backend::WrapErr;
 use candle::{
-    backend::BackendStorage, cuda_backend::cudarc::driver::LaunchConfig, shape::Dim, CpuStorage,
-    CudaStorage, DType, Layout, Shape, Storage,
+    cuda_backend::cudarc::driver::{LaunchAsync, LaunchConfig},
+    shape::Dim,
+    DType,
 };
 use candle::{Device, Tensor};
 use common::cuda_ext::get_tensor_cuda_device_ptr;
-use std::ops::Deref;
 
 fn scatter_add_kernel_name(root: &str, dtype0: DType, dtype1: DType) -> String {
     let dtype0 = dtype0.as_str();
@@ -57,11 +56,11 @@ pub fn cuda_scatter_add<D: Dim>(
             candle::bail!("unexpected device")
         }
     };
-    let (ids_o1, ids_o2) = match index.layout().contiguous_offsets() {
+    let (_ids_o1, _ids_o2) = match index.layout().contiguous_offsets() {
         Some(o12) => o12,
         None => return Err(candle::Error::RequiresContiguous { op: "scatter-add" }.bt())?,
     };
-    let (src_o1, src_o2) = match src.layout().contiguous_offsets() {
+    let (_src_o1, _src_o2) = match src.layout().contiguous_offsets() {
         Some(o12) => o12,
         None => return Err(candle::Error::RequiresContiguous { op: "scatter-add" }.bt())?,
     };
@@ -92,7 +91,7 @@ fn test_inplace_scatter_add() -> candle::Result<()> {
     let index = Tensor::new(vec![vec![0_i64, 1, 2, 0, 0], vec![0, 1, 2, 2, 2]], &device)?;
     let dst = Tensor::zeros((3, 5), DType::I64, &device)?;
     println!("afer inplace scatter add:{}", dst.to_string());
-    let x = dst.scatter_add(&index, &src, 0)?;
+    let _x = dst.scatter_add(&index, &src, 0)?;
     // println!("afer inplace scatter add:{}", x.to_string());
     cuda_scatter_add(&dst, &index, &src, 0)?;
     println!("afer inplace scatter add:{}", dst.to_string());

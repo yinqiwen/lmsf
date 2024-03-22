@@ -1,8 +1,7 @@
-use candle_nn::seq;
 use num::{FromPrimitive, ToPrimitive};
-use std::cell::{Ref, RefCell};
+use std::cell::RefCell;
 use std::rc::Rc;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use std::{collections::HashMap, sync::atomic::AtomicU32};
 
@@ -298,7 +297,7 @@ pub struct SequenceGroup {
 pub type SequenceGroupRef = Rc<RefCell<SequenceGroup>>;
 
 impl SequenceGroup {
-    pub fn newRef(self) -> SequenceGroupRef {
+    pub fn new_ref(self) -> SequenceGroupRef {
         Rc::new(RefCell::new(self))
     }
     pub fn new(

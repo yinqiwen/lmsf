@@ -11,12 +11,12 @@ pub use attention::PagedAttention;
 pub use cache::Cache;
 pub use layer::Layer;
 pub use linear::{
-    linear, linear_no_bias, ColumnParallelLinear, Linear, LinearWeights, QKVLinear,
+    ColumnParallelLinear, LinearWeights,
     QKVParallelLinear, UnquantizedLinearWeights,
 };
 pub use registry::WeightRegistry;
 pub use rotary_embedding::RotaryEmbedding;
 pub use sampler::Sampler;
-pub use vocab_parallel_embedding::{embedding, Embedding};
+pub use vocab_parallel_embedding::{Embedding};
 
 pub mod quantization;

@@ -1,7 +1,5 @@
 use candle::cuda_backend::cudarc::driver::sys::CUstream;
-use candle::{
-    cuda_backend::cudarc::driver::DeviceRepr, CpuStorage, CudaStorage, DType, Device, Tensor,
-};
+use candle::{cuda_backend::cudarc::driver::DeviceRepr, Device, Tensor};
 use common::cuda_ext::get_tensor_cuda_device_ptr;
 use common::get_tensor_kernel_param;
 use libc::c_int;
@@ -17,7 +15,7 @@ extern "C" {
 pub fn unsafe_tensor_zero(t: &Tensor) -> candle::Result<()> {
     let n = t.dtype().size_in_bytes() * t.elem_count();
     match t.device() {
-        Device::Cpu => unsafe { todo!("cpu memset zero") },
+        Device::Cpu => todo!("cpu memset zero"),
         Device::Cuda(cuda_dev) => {
             let stream = cuda_dev.cu_stream();
             let dptr = get_tensor_cuda_device_ptr(t)?;
@@ -133,7 +131,7 @@ pub fn unsafe_tensor_write<T: DeviceRepr + Unpin + std::fmt::Debug>(
     //let dptr = get_tensor_kernel_param(t)?;
     let dptr = get_tensor_cuda_device_ptr(t)?;
     let hptr = v.as_ptr() as *const c_void;
-    println!("data:{:?}", v);
+    // println!("data:{:?}", v);
 
     match t.device() {
         Device::Cpu => unsafe {
@@ -154,6 +152,7 @@ pub fn unsafe_tensor_write<T: DeviceRepr + Unpin + std::fmt::Debug>(
 
 #[test]
 fn test_cuda_async_htod_copy() -> candle::Result<()> {
+    use candle::{DType, Device};
     let cpu = Device::Cpu;
     let device = Device::new_cuda(0)?;
     let v = vec![1.0_f32, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0];
@@ -169,6 +168,7 @@ fn test_cuda_async_htod_copy() -> candle::Result<()> {
 
 #[test]
 fn test_cuda_zero() -> candle::Result<()> {
+    use candle::{DType, Device};
     let device = Device::new_cuda(0)?;
     let b = Tensor::ones(8, DType::F32, &device)?;
     // unsafe_tensor_write(&b, v)?;

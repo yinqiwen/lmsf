@@ -1,11 +1,9 @@
 use anyhow::{anyhow, Result};
-use metrics::{counter, gauge, histogram};
+use metrics::{counter, gauge};
 use std::sync::atomic::AtomicU64;
 use std::{
     collections::{HashMap, HashSet},
-    ops::DerefMut,
-    str::FromStr,
-    sync::{Arc, Mutex},
+    sync::Arc,
     thread::JoinHandle,
     time::Instant,
 };
@@ -15,20 +13,20 @@ use tokio::sync::oneshot;
 use crate::{
     common::{
         config::{CacheConfig, ModelConfig, ParallelConfig, SchedulerConfig},
-        output::{CompletionOutput, RequestOutput},
+        output::RequestOutput,
         sampling_params::{EarlyStopType, SamplingParams},
         sequence::{
             SamplerOutput, Sequence, SequenceGroup, SequenceGroupMetadata, SequenceGroupOutput,
             SequenceGroupRef, SequenceOutput, SequenceRef, SequenceState,
         },
-        tokenizer::{decode_token, detokenize_incrementally, DecodeTokenOptions},
+        tokenizer::{decode_token, DecodeTokenOptions},
     },
     model_executor::models::{ChatTemplate, ModelFactory},
     sched::scheduler::{Scheduler, SchedulerOutputs},
     worker::model_worker::Worker,
 };
 
-use tokenizers::{processors::template::Template, Encoding, Tokenizer};
+use tokenizers::{Encoding, Tokenizer};
 
 pub enum LLMTaskResponseReceiver {
     Normal(oneshot::Receiver<RequestOutput>),
@@ -337,7 +335,7 @@ impl LLMEngine {
             if let Some(child_samples) = parent_child_dict.get(&parent_borrow.seq_id) {
                 if child_samples.is_empty() {
                     parent_borrow.update_state(SequenceState::FinishedAborted);
-                    seq_group.borrow_mut().remove(parent_borrow.seq_id);
+                    let _ = seq_group.borrow_mut().remove(parent_borrow.seq_id);
                     self.scheduler.free_seq(parent_borrow.seq_id);
                     continue;
                 }
@@ -428,7 +426,7 @@ impl LLMEngine {
             if *is_new {
                 unselected_child_seqs.push((seq.clone(), parent.clone()));
             } else {
-                seq_group_borrow.remove(seq.borrow().seq_id);
+                let _ = seq_group_borrow.remove(seq.borrow().seq_id);
             }
         }
 
@@ -491,7 +489,7 @@ impl LLMEngine {
             if let Some(parent) = parent {
                 if std::rc::Rc::ptr_eq(&seq, &parent) {
                     let seq_id = seq.borrow().seq_id;
-                    seq_group_borrow.remove(seq_id);
+                    let _ = seq_group_borrow.remove(seq_id);
                     self.scheduler.free_seq(seq_id);
                 }
             }
@@ -511,7 +509,7 @@ impl LLMEngine {
             .iter()
             .zip(output.into_iter())
         {
-            self.process_sequence_group_outputs(seq_group.clone(), outputs);
+            self.process_sequence_group_outputs(seq_group.clone(), outputs)?;
         }
 
         self.scheduler.free_finished_seq_groups();
@@ -565,7 +563,7 @@ impl LLMEngine {
             );
             seq_group_metadata_list.push(seq_group_metadata);
         }
-        let modle_start = std::time::Instant::now();
+        let _modle_start = std::time::Instant::now();
         let output = self
             .worker
             .execute_model(seq_group_metadata_list, &sched_result, true)?;
@@ -674,10 +672,10 @@ fn run_engine(
                     if let Some(task) = task_map.remove(&request_id) {
                         match task.responder {
                             LLMTaskResponder::Stream(r) => {
-                                r.blocking_send(req_out);
+                                let _ = r.blocking_send(req_out);
                             }
                             LLMTaskResponder::Normal(r) => {
-                                r.send(req_out);
+                                let _ = r.send(req_out);
                             }
                         }
                     } else {
@@ -687,7 +685,7 @@ fn run_engine(
                     if let Some(task) = task_map.get(&request_id) {
                         match &task.responder {
                             LLMTaskResponder::Stream(r) => {
-                                let result = r.blocking_send(req_out);
+                                let _result = r.blocking_send(req_out);
                                 // tracing::info!("#### send:{:?}", result);
                             }
                             _ => {}
@@ -716,7 +714,7 @@ impl Drop for JoinHandleWrapper {
     fn drop(&mut self) {
         match self.h.take() {
             Some(h) => {
-                h.join();
+                let _ = h.join();
             }
             _ => {}
         }

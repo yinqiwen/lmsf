@@ -1,10 +1,7 @@
-use candle::cuda_backend::cudarc::driver::{DevicePtr, DeviceRepr, LaunchAsync};
+use candle::cuda_backend::cudarc::driver::LaunchAsync;
 use candle::cuda_backend::WrapErr;
-use candle::{
-    backend::BackendStorage, cuda_backend::cudarc::driver::LaunchConfig, shape::Dim, CpuStorage,
-    CudaStorage, DType, Layout, Shape, Storage, WithDType,
-};
-use candle::{Device, IndexOp, Tensor};
+use candle::{cuda_backend::cudarc::driver::LaunchConfig, DType, WithDType};
+use candle::{Device, Tensor};
 use common::cuda_ext::get_tensor_cuda_device_ptr;
 
 fn kernel_name(root: &str, dtype: DType) -> String {
@@ -102,6 +99,7 @@ pub fn cuda_assign<D: WithDType>(t: &Tensor, v: D) -> candle::Result<()> {
 
 #[test]
 fn test_assign() -> candle::Result<()> {
+    use candle::IndexOp;
     let device = candle::Device::new_cuda(0).unwrap();
 
     let test = Tensor::rand(1_f32, 10.0, (2, 10), &device)?;

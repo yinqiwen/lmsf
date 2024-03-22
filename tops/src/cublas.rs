@@ -1,8 +1,5 @@
-use candle::{
-    cuda_backend::{cudarc::driver::sys::CUstream, DeviceId},
-    DType, Device, Shape, Tensor,
-};
-use common::ffi::{get_scalar_type, CShapeView, CTensorView, ScalarType};
+use candle::{cuda_backend::cudarc::driver::sys::CUstream, DType, Device, Tensor};
+use common::ffi::{CShapeView, CTensorView, ScalarType};
 use common::{DefaultTensorCreator, TensorCreator};
 use libc::{c_int, c_void};
 
@@ -52,9 +49,9 @@ impl CublasWrapper {
         };
 
         let p = match dtype {
-            DType::F16 => unsafe { new_gemm(device_id, stream, ScalarType::DATA_F16 as i32) },
-            DType::BF16 => unsafe { new_gemm(device_id, stream, ScalarType::DATA_BF16 as i32) },
-            DType::F32 => unsafe { new_gemm(device_id, stream, ScalarType::DATA_F32 as i32) },
+            DType::F16 => unsafe { new_gemm(device_id, stream, ScalarType::DataF16 as i32) },
+            DType::BF16 => unsafe { new_gemm(device_id, stream, ScalarType::DataBF16 as i32) },
+            DType::F32 => unsafe { new_gemm(device_id, stream, ScalarType::DataF32 as i32) },
             _ => {
                 candle::bail!("not supported dtype")
             }
@@ -68,7 +65,7 @@ impl CublasWrapper {
         tensor_creator: &mut F,
     ) -> candle::Result<Tensor> {
         let output = if input.dims().len() == 3 {
-            let (batch, num, tmp) = input.dims3()?;
+            let (batch, num, _tmp) = input.dims3()?;
             let (output_dims, _) = weight.dims2()?;
             //let output = Tensor::zeros((batch, num, output_dims), input.dtype(), input.device())?;
             tensor_creator.new(
@@ -78,7 +75,7 @@ impl CublasWrapper {
                 false,
             )?
         } else {
-            let (num, tmp) = input.dims2()?;
+            let (num, _tmp) = input.dims2()?;
             let (output_dims, _) = weight.dims2()?;
             //let output = Tensor::zeros((batch, num, output_dims), input.dtype(), input.device())?;
             tensor_creator.new((num, output_dims), input.dtype(), input.device(), false)?
@@ -123,8 +120,10 @@ impl CublasWrapper {
 
 #[test]
 fn test_gemm_config() -> candle::Result<()> {
+    use candle::Shape;
+    use common::ffi::get_scalar_type;
     unsafe {
-        let gemm = new_gemm(0, std::ptr::null_mut(), ScalarType::DATA_F16 as i32);
+        let gemm = new_gemm(0, std::ptr::null_mut(), ScalarType::DataF16 as i32);
 
         let mut configs = Vec::new();
 

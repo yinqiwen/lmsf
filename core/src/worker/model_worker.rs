@@ -3,9 +3,7 @@ use candle::{Device, Tensor};
 
 use crate::common::config::{CacheConfig, ModelConfig, ParallelConfig};
 use crate::common::sampling_params::SamplingType;
-use crate::common::sequence::{
-    SamplerOutput, Sequence, SequenceData, SequenceGroup, SequenceGroupMetadata, SequenceState,
-};
+use crate::common::sequence::{SamplerOutput, SequenceData, SequenceGroupMetadata};
 use crate::model_executor::input_metadata::InputMetadata;
 use crate::model_executor::layers::Sampler;
 use crate::model_executor::models::{Model, ModelFactory};
@@ -16,12 +14,12 @@ use crate::SamplingParams;
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::thread::sleep;
-use std::time::Duration;
 
 use super::cache_engine::CacheEngine;
 
 const _PAD_SLOT_ID: i64 = -1;
+
+#[allow(dead_code)]
 pub struct Worker {
     device: Device,
     cache_config: CacheConfig,
@@ -62,7 +60,7 @@ impl Worker {
             &device,
         )?;
 
-        cuda_device.synchronize();
+        let _ = cuda_device.synchronize();
         let (free, total) = candle::cuda_backend::cudarc::driver::result::mem_get_info()?;
         tracing::info!("GPU free:{}, total:{} after load model.", free, total);
 
@@ -161,6 +159,7 @@ impl Worker {
         Ok((num_gpu_blocks, num_cpu_blocks))
     }
 
+    #[allow(dead_code)]
     fn synchronize_device(&self) -> Result<()> {
         match &self.device {
             Device::Cuda(cuda) => {
@@ -172,6 +171,7 @@ impl Worker {
         }
         Ok(())
     }
+    #[allow(dead_code)]
     pub fn profile_run(&mut self) -> Result<()> {
         // Enable top-k sampling to reflect the accurate memory usage.
         let vocab_size = self.model_config.get_vocab_size();
@@ -224,9 +224,9 @@ impl Worker {
         if !sched_output.blocks_to_copy.is_empty() {
             self.cache_engine.copy(&sched_output.blocks_to_copy)?;
         }
-        let prepare_start = std::time::Instant::now();
+        let _prepare_start = std::time::Instant::now();
         let (input_tokens, input_positions, input_metadata) = if sched_output.prompt_run {
-            self.prepare_prompt2(&seq_group_metadata_list)?
+            self.prepare_prompt(&seq_group_metadata_list)?
         } else {
             self.prepare_decode(&seq_group_metadata_list)?
         };
@@ -248,7 +248,7 @@ impl Worker {
         // tracing::info!("logits data:{:?}", logits.to_device(&cpu)?.to_string());
         //Ok(logits)
         match logits.device() {
-            Device::Cuda(cuda) => {
+            Device::Cuda(_cuda) => {
                 //cuda.synchronize()?;
                 // tracing::info!("modle forward cost {:?}", prepare_start.elapsed());
             }
@@ -261,7 +261,7 @@ impl Worker {
             .map_err(|e| anyhow!("{}", e))
     }
 
-    fn prepare_prompt2(
+    fn prepare_prompt(
         &self,
         seq_group_metadata_list: &[SequenceGroupMetadata],
     ) -> Result<(Tensor, Tensor, InputMetadata)> {
@@ -350,78 +350,78 @@ impl Worker {
         ))
     }
 
-    fn prepare_prompt(
-        &self,
-        seq_group_metadata_list: &[SequenceGroupMetadata],
-    ) -> Result<(Tensor, Tensor, InputMetadata)> {
-        let mut prompt_lens = Vec::new();
-        let mut input_tokens = Vec::new();
-        let mut input_positions = Vec::new();
-        let mut slot_mapping = Vec::new();
-        for seq_group in seq_group_metadata_list.iter() {
-            for (seq_id, seq) in &seq_group.seq_data {
-                let prompt_len = seq.borrow().get_prompt_len();
-                prompt_lens.push(prompt_len);
-                input_tokens.push(seq.borrow().get_token_ids());
-                // # NOTE(woosuk): Here we assume that the first token in the prompt
-                // # is always the first token in the sequence.
-                input_positions.push((0..prompt_len as i64).collect::<Vec<_>>());
+    // fn prepare_prompt(
+    //     &self,
+    //     seq_group_metadata_list: &[SequenceGroupMetadata],
+    // ) -> Result<(Tensor, Tensor, InputMetadata)> {
+    //     let mut prompt_lens = Vec::new();
+    //     let mut input_tokens = Vec::new();
+    //     let mut input_positions = Vec::new();
+    //     let mut slot_mapping = Vec::new();
+    //     for seq_group in seq_group_metadata_list.iter() {
+    //         for (seq_id, seq) in &seq_group.seq_data {
+    //             let prompt_len = seq.borrow().get_prompt_len();
+    //             prompt_lens.push(prompt_len);
+    //             input_tokens.push(seq.borrow().get_token_ids());
+    //             // # NOTE(woosuk): Here we assume that the first token in the prompt
+    //             // # is always the first token in the sequence.
+    //             input_positions.push((0..prompt_len as i64).collect::<Vec<_>>());
 
-                if seq_group.block_tables.is_empty() {
-                    slot_mapping.push([_PAD_SLOT_ID].repeat(prompt_len));
-                    continue;
-                }
-                // # Compute the slot mapping.
-                //slot_mapping.push(Vec::new());
-                let mut seq_slot_mapping = Vec::new();
-                // let block_table = seq_group.block_tables.get(&seq.borrow().seq_id).unwrap();
-                let block_table = seq_group.block_tables.get(seq_id).unwrap();
-                // # Mask the [0, start_idx) tokens of the prompt with _PAD_SLOT_ID,
-                // # where start_idx is max(0, prompt_len - sliding_window).
-                // # For example, if the prompt len is 10, sliding window is 8, and
-                // # block size is 4, the first two tokens are masked and the slot
-                // # mapping will be [-1, -1, 2, 3, 4, 5, 6, 7, 0, 1].
-                let start_idx = if let Some(sliding_window) = self.model_config.get_sliding_window()
-                {
-                    //0.min(prompt_len - sliding_window)
-                    std::cmp::max(0, prompt_len as i64 - sliding_window as i64)
-                } else {
-                    0
-                } as usize;
+    //             if seq_group.block_tables.is_empty() {
+    //                 slot_mapping.push([_PAD_SLOT_ID].repeat(prompt_len));
+    //                 continue;
+    //             }
+    //             // # Compute the slot mapping.
+    //             //slot_mapping.push(Vec::new());
+    //             let mut seq_slot_mapping = Vec::new();
+    //             // let block_table = seq_group.block_tables.get(&seq.borrow().seq_id).unwrap();
+    //             let block_table = seq_group.block_tables.get(seq_id).unwrap();
+    //             // # Mask the [0, start_idx) tokens of the prompt with _PAD_SLOT_ID,
+    //             // # where start_idx is max(0, prompt_len - sliding_window).
+    //             // # For example, if the prompt len is 10, sliding window is 8, and
+    //             // # block size is 4, the first two tokens are masked and the slot
+    //             // # mapping will be [-1, -1, 2, 3, 4, 5, 6, 7, 0, 1].
+    //             let start_idx = if let Some(sliding_window) = self.model_config.get_sliding_window()
+    //             {
+    //                 //0.min(prompt_len - sliding_window)
+    //                 std::cmp::max(0, prompt_len as i64 - sliding_window as i64)
+    //             } else {
+    //                 0
+    //             } as usize;
 
-                for i in 0..prompt_len {
-                    if i < start_idx {
-                        seq_slot_mapping.push(_PAD_SLOT_ID);
-                        continue;
-                    }
-                    let block_number = block_table[i / self.block_size];
-                    let block_offset = i % self.block_size;
-                    let slot = block_number as usize * self.block_size + block_offset;
-                    seq_slot_mapping.push(slot as i64);
-                }
-                slot_mapping.push(seq_slot_mapping);
-            }
-        }
-        let max_prompt_len = prompt_lens.iter().max().unwrap();
-        let input_tokens = make_tensor_with_pad(
-            &self.device,
-            input_tokens
-                .iter()
-                .map(|x| x.iter().map(|x| *x as i64).collect::<Vec<_>>())
-                .collect::<Vec<_>>(),
-            *max_prompt_len,
-            0,
-        )?;
-        let input_positions =
-            make_tensor_with_pad(&self.device, input_positions, *max_prompt_len, 0)?;
-        let slot_mapping_tensor =
-            make_tensor_with_pad(&self.device, slot_mapping, *max_prompt_len, _PAD_SLOT_ID)?;
-        Ok((
-            input_tokens,
-            input_positions,
-            InputMetadata::new(prompt_lens, slot_mapping_tensor, None, None, None, false),
-        ))
-    }
+    //             for i in 0..prompt_len {
+    //                 if i < start_idx {
+    //                     seq_slot_mapping.push(_PAD_SLOT_ID);
+    //                     continue;
+    //                 }
+    //                 let block_number = block_table[i / self.block_size];
+    //                 let block_offset = i % self.block_size;
+    //                 let slot = block_number as usize * self.block_size + block_offset;
+    //                 seq_slot_mapping.push(slot as i64);
+    //             }
+    //             slot_mapping.push(seq_slot_mapping);
+    //         }
+    //     }
+    //     let max_prompt_len = prompt_lens.iter().max().unwrap();
+    //     let input_tokens = make_tensor_with_pad(
+    //         &self.device,
+    //         input_tokens
+    //             .iter()
+    //             .map(|x| x.iter().map(|x| *x as i64).collect::<Vec<_>>())
+    //             .collect::<Vec<_>>(),
+    //         *max_prompt_len,
+    //         0,
+    //     )?;
+    //     let input_positions =
+    //         make_tensor_with_pad(&self.device, input_positions, *max_prompt_len, 0)?;
+    //     let slot_mapping_tensor =
+    //         make_tensor_with_pad(&self.device, slot_mapping, *max_prompt_len, _PAD_SLOT_ID)?;
+    //     Ok((
+    //         input_tokens,
+    //         input_positions,
+    //         InputMetadata::new(prompt_lens, slot_mapping_tensor, None, None, None, false),
+    //     ))
+    // }
     fn prepare_decode(
         &self,
         seq_group_metadata_list: &[SequenceGroupMetadata],
@@ -468,7 +468,7 @@ impl Worker {
             }
         }
 
-        let batch_size = input_tokens.len();
+        let _batch_size = input_tokens.len();
         let max_context_len = *context_lens.iter().max().unwrap();
 
         let input_tokens_tensor = make_tensor_with_pad(&self.device, input_tokens, 1, 0)?;
@@ -479,7 +479,7 @@ impl Worker {
         let context_lens_tensor =
             Tensor::from_vec(context_lens, (context_lens_size,), &self.device)?;
 
-        let max_block_table_len = decode_block_tables.iter().map(|x| x.len()).max().unwrap();
+        let _max_block_table_len = decode_block_tables.iter().map(|x| x.len()).max().unwrap();
         let decode_block_tables_tensor = make_tensor_with_pad(
             &self.device,
             decode_block_tables,

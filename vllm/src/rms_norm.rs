@@ -1,10 +1,10 @@
 use candle::cuda_backend::cudarc::driver::sys::CUstream;
-use candle::{Device, Shape, Tensor};
+use candle::{Shape, Tensor};
 use common::cuda_ext::get_tensor_cuda_device_ptr;
 use common::ffi::{get_scalar_type, ScalarType};
 use common::{DefaultTensorCreator, TensorCreator};
 
-use std::os::raw::{c_uint, c_void};
+use std::os::raw::c_void;
 
 #[derive(Debug)]
 #[repr(C)]
@@ -34,7 +34,7 @@ extern "C" {
 #[derive(Clone, Debug)]
 pub struct RmsNorm {
     weight: Tensor,
-    normalized_shape: Shape,
+    _normalized_shape: Shape,
     eps: f64,
 }
 
@@ -48,7 +48,7 @@ impl RmsNorm {
         )?;
         Ok(Self {
             weight,
-            normalized_shape,
+            _normalized_shape: normalized_shape,
             eps,
         })
     }
@@ -80,7 +80,7 @@ impl RmsNorm {
         &self,
         xs: &Tensor,
         tensor_creator: &mut F,
-        log_enable: bool,
+        _log_enable: bool,
     ) -> candle::Result<Tensor> {
         let hidden_size = *xs.dims().last().unwrap();
         let num_tokens = xs.elem_count() / hidden_size;

@@ -1,11 +1,9 @@
 use candle::cuda_backend::cudarc::driver::sys::CUstream;
-use candle::Module;
-use candle::{Device, Shape, Tensor};
+
+use candle::{Shape, Tensor};
 use common::ffi::{CShapeView, CTensorView};
 use common::{DefaultTensorCreator, TensorCreator};
 use libc::c_float;
-
-use std::os::raw::{c_uint, c_void};
 
 extern "C" {
     // void cuda_oneflow_rms_norm(CTensorView x, CTensorView weight, CShapeView normalized_shape, float epsilon,
@@ -26,7 +24,7 @@ pub struct RmsNorm {
     weight: Option<Tensor>,
     normalized_shape: Shape,
     eps: f64,
-    elementwise_affine: bool,
+    _elementwise_affine: bool,
 }
 
 impl RmsNorm {
@@ -35,7 +33,7 @@ impl RmsNorm {
             weight: None,
             normalized_shape: s.into(),
             eps,
-            elementwise_affine,
+            _elementwise_affine: elementwise_affine,
         }
     }
     pub fn load<S: Into<Shape>>(s: S, eps: f64, vb: candle_nn::VarBuilder) -> candle::Result<Self> {
@@ -51,7 +49,7 @@ impl RmsNorm {
             weight: Some(weight),
             normalized_shape,
             eps,
-            elementwise_affine: true,
+            _elementwise_affine: true,
         })
     }
     pub fn forward_<F: TensorCreator>(
@@ -100,6 +98,7 @@ impl candle::Module for RmsNorm {
 
 #[test]
 fn test_rms_norm() -> candle::Result<()> {
+    use candle::{Device, Module};
     let device = Device::new_cuda(0)?;
     let a = Tensor::new(
         &[

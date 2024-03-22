@@ -9,6 +9,8 @@ use crate::common::sequence::SequenceGroup;
 use crate::common::sequence::SequenceState;
 use anyhow::anyhow;
 use anyhow::Result;
+
+#[allow(dead_code)]
 pub struct BlockAllocator {
     device: DeviceType,
     block_size: usize,
@@ -62,6 +64,8 @@ pub enum AllocStatus {
 }
 
 type BlockTable = Vec<Arc<PhysicalTokenBlock>>;
+
+#[allow(dead_code)]
 pub struct BlockSpaceManager {
     block_size: usize,
     num_total_gpu_blocks: usize,
@@ -317,7 +321,7 @@ impl BlockSpaceManager {
         //     self.block_tables
         // );
     }
-
+    #[allow(dead_code)]
     pub fn reset(&mut self) {
         let block_tables = self.block_tables.clone();
         for block_table in block_tables.values() {
@@ -332,10 +336,11 @@ impl BlockSpaceManager {
         // let block_numbers = Vec::new();
         block_table.iter().map(|v| v.block_number).collect()
     }
+    #[allow(dead_code)]
     pub fn get_num_free_gpu_blocks(&self) -> usize {
         self.gpu_allocator.get_num_free_blocks()
     }
-
+    #[allow(dead_code)]
     pub fn get_num_free_cpu_blocks(&self) -> usize {
         self.cpu_allocator.get_num_free_blocks()
     }

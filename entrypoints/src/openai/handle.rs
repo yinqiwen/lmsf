@@ -1,13 +1,12 @@
 use axum::{
     body::Body,
     extract::Extension,
-    http::{header, request, HeaderMap, StatusCode},
+    http::{header, HeaderMap, StatusCode},
     response::IntoResponse,
-    routing::{get, post},
-    Json, Router,
+    Json,
 };
 use futures_core::stream::Stream;
-use tokio::sync::mpsc::{self, error::TryRecvError};
+use tokio::sync::mpsc::{self};
 // use futures_util::pin_mut;
 // use futures_util::stream::StreamExt;
 
@@ -126,7 +125,7 @@ fn get_stream_completion(
                             finish_reason:output.finish_reason.map(|s| s.to_string()),
                         };
                         let usage = match output.finish_reason{
-                            Some(reason)=>{
+                            Some(_reason)=>{
                                 finish_reason_sent[i] = true;
                                 let prompt_tokens = result.prompt_token_ids.len();
                                 Some(UsageInfo{
@@ -195,7 +194,7 @@ pub async fn create_chat_completion(
     let prompt = LLMPrompt::multi_role(messages);
     let output = match engine.add(prompt, sampling_params, stream) {
         Ok(output) => output,
-        Err(e) => {
+        Err(_e) => {
             return Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "add prompt into engine failed",
@@ -211,12 +210,12 @@ pub async fn create_chat_completion(
                 let body = Body::from_stream(response);
                 Ok((headers, body))
             }
-            Err(e) => Err((
+            Err(_e) => Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "recv prompt response from engine failed",
             )),
         },
-        LLMTaskResponseReceiver::Stream(mut o) => {
+        LLMTaskResponseReceiver::Stream(o) => {
             let headers = [(header::CONTENT_TYPE, "text/event-stream")];
             println!("#####stream!");
             let body = Body::from_stream(get_stream_completion(

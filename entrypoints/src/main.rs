@@ -1,12 +1,10 @@
 use axum::{
     extract::Extension,
-    http::StatusCode,
-    routing::{get, post},
-    Json, Router,
+    routing::{get, post}, Router,
 };
-use clap::{Parser, ValueEnum};
+use clap::{Parser};
 use lmsf_core::{AsyncLLMEngine, EngineArgs};
-use serde::{Deserialize, Serialize};
+
 
 mod openai;
 
@@ -24,7 +22,7 @@ struct ServerArgs {
 
 #[tokio::main]
 async fn main() {
-    let mut server_args = ServerArgs::parse();
+    let server_args = ServerArgs::parse();
     let args = &server_args.engine_args;
     common::init_tracing(
         args.log_dir.as_ref().map(|x| x.as_str()),

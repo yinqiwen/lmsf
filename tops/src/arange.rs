@@ -1,8 +1,7 @@
 use candle::cuda_backend::cudarc::driver::sys::CUstream;
 use candle::{Device, Tensor, WithDType};
 use common::{
-    ffi::get_scalar_type,
-    ffi::{CTensorView, ScalarType},
+    ffi::{CTensorView},
 };
 use common::{DefaultTensorCreator, TensorCreator};
 use libc::{c_double, c_longlong};

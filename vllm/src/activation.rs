@@ -1,12 +1,12 @@
 use candle::cuda_backend::cudarc::driver::sys::CUstream;
-use candle::Module;
-use candle::{Device, Shape, Tensor};
-use common::cuda_ext::get_tensor_cuda_device_ptr;
-use common::ffi::{get_scalar_type, CShapeView, CTensorView, ScalarType};
-use common::{DefaultTensorCreator, TensorCreator};
-use libc::c_float;
 
-use std::os::raw::{c_uint, c_void};
+use candle::{Shape, Tensor};
+use common::cuda_ext::get_tensor_cuda_device_ptr;
+use common::ffi::{get_scalar_type, ScalarType};
+use common::{DefaultTensorCreator, TensorCreator};
+
+
+use std::os::raw::{c_void};
 
 #[derive(Debug)]
 #[repr(C)]

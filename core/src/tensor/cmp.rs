@@ -1,17 +1,14 @@
-use candle::cuda_backend::cudarc::driver::{DevicePtr, DeviceRepr, LaunchAsync};
+use candle::cuda_backend::cudarc::driver::LaunchAsync;
 use candle::cuda_backend::WrapErr;
-use candle::{
-    backend::BackendStorage, cuda_backend::cudarc::driver::LaunchConfig, shape::Dim, CpuStorage,
-    CudaStorage, DType, Layout, Shape, Storage,
-};
+use candle::{cuda_backend::cudarc::driver::LaunchConfig, DType};
 use candle::{
     scalar::{TensorOrScalar, TensorScalar},
     Device, Tensor,
 };
-
 use common::cuda_ext::get_tensor_cuda_device_ptr;
-use common::{DefaultTensorCreator, TensorCreator};
+use common::TensorCreator;
 
+#[allow(dead_code)]
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum CmpOp {
     Eq,

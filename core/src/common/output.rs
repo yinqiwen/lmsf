@@ -1,8 +1,6 @@
 use std::{sync::Arc, time::Instant};
 
-use super::sequence::{
-    PromptLogprobs, SampleLogprobs, SequenceGroup, SequenceGroupRef, SequenceState,
-};
+use super::sequence::{PromptLogprobs, SampleLogprobs, SequenceGroupRef};
 
 #[derive(Debug, Clone)]
 pub struct CompletionOutput {

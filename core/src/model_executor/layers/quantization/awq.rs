@@ -1,10 +1,9 @@
 use super::QuantizationConfig;
 use crate::model_executor::layers::linear::LinearWeights;
 use crate::model_executor::layers::WeightRegistry;
-use candle::{DType, Device, IndexOp, Shape, Tensor, D};
-use common::{DefaultTensorCreator, TensorCreator};
+use candle::{DType, Shape, Tensor};
+use common::TensorCreator;
 use std::collections::HashMap;
-use std::sync::Arc;
 
 #[derive(Debug, Clone)]
 pub struct AWQConfig {
@@ -35,7 +34,7 @@ impl QuantizationConfig for AWQConfig {
         vec!["gelu", "gelu_fast", "gelu_new", "gelu_pytorch_tanh"]
     }
 
-    fn from_json(mut val: serde_json::Value) -> candle::Result<Self> {
+    fn from_json(val: serde_json::Value) -> candle::Result<Self> {
         let cfg_dict = val
             .as_object()
             .ok_or(candle::Error::Msg("invalid json".to_string()))?;
@@ -48,7 +47,7 @@ impl QuantizationConfig for AWQConfig {
                 bits.as_u64()
                     .ok_or(candle::Error::Msg("invalid json with 'bits'".to_string()))?
             } else {
-                return candle::bail!("no w_bit/bits found in json");
+                candle::bail!("no w_bit/bits found in json")
             }
         } as usize;
 
@@ -62,7 +61,7 @@ impl QuantizationConfig for AWQConfig {
                     "invalid json with 'group_size'".to_string(),
                 ))?
             } else {
-                return candle::bail!("no q_group_size/group_size found in json");
+                candle::bail!("no q_group_size/group_size found in json")
             }
         } as usize;
 
@@ -71,7 +70,7 @@ impl QuantizationConfig for AWQConfig {
                 "invalid json with 'zero_point'".to_string(),
             ))?
         } else {
-            return candle::bail!("no q_group_size/group_size found in json");
+            candle::bail!("no q_group_size/group_size found in json")
         };
 
         Self::new(weight_bits, group_size, zero_point)
@@ -81,7 +80,7 @@ impl QuantizationConfig for AWQConfig {
 impl AWQConfig {
     pub fn new(weight_bits: usize, group_size: usize, zero_point: bool) -> candle::Result<Self> {
         if weight_bits != 4 {
-            return candle::bail!("Currently, only 4-bit weight quantization is supported for AWQ, but got {weight_bits} bits.");
+            candle::bail!("Currently, only 4-bit weight quantization is supported for AWQ, but got {weight_bits} bits.")
         }
         let pack_factor = 32 / weight_bits;
         Ok(Self {

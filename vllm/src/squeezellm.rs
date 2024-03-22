@@ -1,8 +1,7 @@
-use candle::cuda_backend::cudarc::driver::{DevicePtr, DeviceRepr};
-use candle::{cuda_backend::cudarc::driver::sys::CUstream, DType, Device, Tensor, D};
+
+use candle::{cuda_backend::cudarc::driver::sys::CUstream, Tensor};
 use common::{
-    cuda_ext::get_tensor_cuda_device_ptr, ffi::get_scalar_type, ffi::ScalarType,
-    DefaultTensorCreator, TensorCreator,
+    cuda_ext::get_tensor_cuda_device_ptr,
 };
 use libc::c_void;
 

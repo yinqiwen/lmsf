@@ -1,7 +1,7 @@
 use std::sync::atomic::Ordering;
 #[derive(Clone)]
 pub struct LogicalTokenBlock {
-    block_number: u32,
+    _block_number: u32,
     block_size: usize,
     token_ids: Vec<u32>,
 }
@@ -9,7 +9,7 @@ pub struct LogicalTokenBlock {
 impl LogicalTokenBlock {
     pub fn new(block_number: u32, block_size: usize) -> Self {
         Self {
-            block_number,
+            _block_number: block_number,
             block_size,
             token_ids: Vec::new(),
         }

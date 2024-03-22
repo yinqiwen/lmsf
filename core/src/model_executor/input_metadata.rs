@@ -1,6 +1,6 @@
 use candle::Tensor;
 
-use super::ops::AttentionBias;
+// use super::ops::AttentionBias;
 
 pub struct InputMetadata {
     pub(crate) prompt_lens: Vec<usize>,
@@ -10,7 +10,7 @@ pub struct InputMetadata {
     pub(crate) block_tables: Option<Tensor>,
     use_cuda_graph: bool,
     pub(crate) is_prompt: bool,
-    pub(crate) attn_bias: Option<Box<dyn AttentionBias>>,
+    // pub(crate) attn_bias: Option<Box<dyn AttentionBias>>,
 }
 impl InputMetadata {
     pub fn new(
@@ -30,7 +30,7 @@ impl InputMetadata {
             block_tables,
             use_cuda_graph,
             is_prompt,
-            attn_bias: None,
+            // attn_bias: None,
         }
     }
 }

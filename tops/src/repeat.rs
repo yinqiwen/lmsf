@@ -1,11 +1,8 @@
 use candle::cuda_backend::cudarc::driver::sys::CUstream;
-use candle::{CpuStorage, CudaStorage, DType, Device, Layout, Shape, Tensor};
-use common::{
-    ffi::get_scalar_type,
-    ffi::{CTensorView, ScalarType},
-};
+use candle::{Shape, Tensor};
+use common::ffi::CTensorView;
 
-use std::os::raw::{c_int, c_void};
+use std::os::raw::c_int;
 
 extern "C" {
     fn cuda_repeat_tensor(
@@ -140,6 +137,7 @@ pub fn cuda_repeat_<S: Into<Shape>, F: TensorCreator>(
 
 #[test]
 fn test_repeate() -> candle::Result<()> {
+    use candle::Device;
     let device = Device::new_cuda(0)?;
     let a = Tensor::new(&[1.0], &device)?;
     let a = a.reshape((1, 1))?;

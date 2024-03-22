@@ -1,7 +1,5 @@
-use candle::safetensors::MmapedSafetensors;
-use candle::IndexOp;
-use candle::{DType, Device, Tensor, D};
-use std::clone;
+use candle::{DType, Device, Tensor};
+
 use std::sync::Arc;
 
 // use crate::model_executor::ops::PosEncoding;
@@ -121,7 +119,7 @@ impl RotaryEmbedding {
     }
     pub fn forward(&self, position: &Tensor, query: &Tensor, key: &Tensor) -> candle::Result<()> {
         // // q,k shape  //[batch_size, seq_len, num_heads * head_size]
-        let (b_sz, seq_len, hidden_size) = query.dims3()?;
+        let (_b_sz, _seq_len, _hidden_size) = query.dims3()?;
         // let fwd_q = query.reshape((b_sz * seq_len, self.num_key_value_heads, self.head_size))?;
         // let fwd_k = key.reshape((b_sz * seq_len, self.num_key_value_heads, self.head_size))?;
         vllm::pos_encoding::apply_rotary_embedding(
@@ -141,12 +139,14 @@ impl RotaryEmbedding {
 
 #[test]
 fn test_() -> candle::Result<()> {
+    use candle::safetensors::MmapedSafetensors;
+    use candle::IndexOp;
     let cuda_dev = Device::new_cuda(0)?;
     let st = unsafe { MmapedSafetensors::new("/data/dev/rust/lmsf/test_qkv")? };
     let qkv = st.load("qkv", &cuda_dev)?;
     let q = qkv.i((.., .., 0..4096))?;
     let k = qkv.i((.., .., 4096..8192))?;
-    let v = qkv.i((.., .., 8192..))?;
+    let _v = qkv.i((.., .., 8192..))?;
     println!("before q:{}", q.to_string());
     println!("before k:{}", k.to_string());
     let position = Tensor::from_slice(&[9_i64], (1, 1), &cuda_dev)?;

@@ -1,10 +1,7 @@
-use candle::cuda_backend::cudarc::driver::{DevicePtr, DeviceRepr, LaunchAsync};
+use candle::cuda_backend::cudarc::driver::LaunchAsync;
 use candle::cuda_backend::WrapErr;
-use candle::{
-    backend::BackendStorage, cuda_backend::cudarc::driver::LaunchConfig, shape::Dim, CpuStorage,
-    CudaStorage, DType, Layout, Shape, Storage, WithDType,
-};
-use candle::{Device, IndexOp, Tensor};
+use candle::{cuda_backend::cudarc::driver::LaunchConfig, DType};
+use candle::{Device, Tensor};
 use common::cuda_ext::get_tensor_cuda_device_ptr;
 
 fn kernel_name(root: &str, dtype: DType) -> String {
@@ -29,7 +26,7 @@ pub fn cuda_copy(dst: &Tensor, src: &Tensor) -> candle::Result<()> {
     }
 
     if !src.is_contiguous() {
-        return candle::bail!("src tensor must be contiguous");
+        candle::bail!("src tensor must be contiguous")
     }
     if dst.is_contiguous() {
         return tops::unsafe_tensor_dtod_copy(dst, src);

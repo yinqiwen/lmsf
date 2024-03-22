@@ -1,8 +1,7 @@
 use anyhow::{anyhow, Result};
 use std::{
     collections::VecDeque,
-    sync::Arc,
-    time::{Duration, Instant},
+    time::{Instant},
 };
 
 use crate::common::sequence::{SequenceGroup, SequenceGroupRef};

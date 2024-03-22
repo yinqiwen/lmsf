@@ -1,12 +1,13 @@
-use candle::{quantized::QuantizedType, DType, Device, IndexOp, NdArray, Tensor};
+use candle::{DType, Device, Tensor};
 use std::{collections::HashMap, sync::Arc};
 
 use crate::common::{
     sampling_params::{SamplingParams, SamplingType},
-    sequence::{Sequence, SequenceData, SequenceDataRef},
+    sequence::SequenceDataRef,
 };
 use common::TensorCreator;
 
+#[allow(dead_code)]
 pub struct SamplingMetadata {
     pub(crate) seq_groups: Vec<(Vec<u64>, Arc<SamplingParams>)>,
     pub(crate) seq_data: HashMap<u64, SequenceDataRef>,
@@ -179,7 +180,7 @@ impl SamplingTensors {
         dtype: DType,
         tensor_creator: &mut F,
     ) -> candle::Result<Self> {
-        let start = std::time::Instant::now();
+        let _start = std::time::Instant::now();
         let prompt_max_len = prompt_tokens.iter().map(|x| x.len()).max().unwrap();
         let mut prompt_padded_tokens = Vec::new();
         for mut tokens in prompt_tokens {

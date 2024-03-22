@@ -2,7 +2,6 @@ use std::cell::RefCell;
 use std::{
     collections::{HashMap, HashSet, VecDeque},
     rc::Rc,
-    sync::Arc,
 };
 
 use crate::common::sequence::{SequenceGroupRef, SequenceRef};
@@ -32,6 +31,7 @@ pub enum PreemptionMode {
     Swap,
     Recompute,
 }
+#[allow(dead_code)]
 pub struct SchedulerOutputs {
     pub(crate) scheduled_seq_groups: Vec<SequenceGroupRef>,
     pub(crate) prompt_run: bool,
@@ -63,6 +63,7 @@ impl SchedulerOutputs {
     }
 }
 
+#[allow(dead_code)]
 pub struct Scheduler {
     pub(crate) scheduler_config: SchedulerConfig,
     cache_config: CacheConfig,
@@ -130,6 +131,7 @@ impl Scheduler {
         self.seq_group_queues[Scheduler::RUNNING] = new_vecs;
     }
 
+    #[allow(dead_code)]
     fn abort_queue_seq_group<'a>(
         queue: &'a mut VecDeque<SequenceGroupRef>,
         mut request_ids: HashSet<u64>,
@@ -204,7 +206,7 @@ impl Scheduler {
     fn append_slot(
         &mut self,
         seq_group: &SequenceGroup,
-        mut blocks_to_copy: &mut HashMap<u32, Vec<u32>>,
+        blocks_to_copy: &mut HashMap<u32, Vec<u32>>,
     ) -> Result<()> {
         for seq in seq_group.get_seqs(Some(SequenceState::Running)) {
             if let Some((src_block, dst_block)) = self.block_manager.append_slot(&seq.borrow())? {

@@ -1,9 +1,8 @@
-use minijinja::{context, Environment};
+use minijinja::Environment;
 use serde::Serialize;
-use std::collections::HashMap;
 
 pub struct ChatTemplate {
-    template: String,
+    _template: String,
     env: Environment<'static>,
 }
 
@@ -15,7 +14,7 @@ impl ChatTemplate {
         env.add_template_owned("default", template_content.clone())
             .map_err(|e| anyhow::anyhow!("{}", e))?;
         Ok(Self {
-            template: template_content,
+            _template: template_content,
             env,
         })
     }
@@ -31,13 +30,14 @@ impl ChatTemplate {
 
 #[test]
 fn test_chat_template() -> anyhow::Result<()> {
-    let DEFAULT_SYSTEM_PROMPT = "You are a helpful, respectful and honest assistant. Always answer as helpfully as possible, while being safe. Your \
+    use minijinja::context;
+    let _DEFAULT_SYSTEM_PROMPT = "You are a helpful, respectful and honest assistant. Always answer as helpfully as possible, while being safe. Your \
     answers should not include any harmful, unethical, racist, sexist, toxic, dangerous, or illegal content. Please ensure\
      that your responses are socially unbiased and positive in nature.
 
     If a question does not make any sense, or is not factually coherent, explain why instead of answering something not \
     correct. If you don't know the answer to a question, please don't share false information.";
-    let t2 = "{% for message in messages %}\
+    let _t2 = "{% for message in messages %}\
     {% if message['role'] == 'user' %}\
     {{ '<|user|>\n' + message['content'] + eos_token }}\
     {% elif message['role'] == 'system' %}\
@@ -81,23 +81,8 @@ fn test_chat_template() -> anyhow::Result<()> {
     {% endif %}
     {% endfor %}";
 
-    // let mut env = Environment::new();
-
-    // //env.s
-    // env.add_template("hello", "Hello {{ name }}!").unwrap();
-    // env.add_template("default", t).unwrap();
-    // let template = env.get_template("default").unwrap();
-    // let ctx = context! { messages =>vec![
-    //     // context!(role => "system", content => "test"),
-    //     context!(role => "user", content => "hello"),
-    // ],
-    // eos_token=>"</s>",
-    // bos_token=>"<s>",
-    // USE_DEFAULT_PROMPT=>false};
-    // println!("##{}##", template.render(ctx).unwrap());
-
     let t = ChatTemplate::new(t)?;
-    let mut ctx = context! { messages =>vec![
+    let ctx = context! { messages =>vec![
         context!(role => "system", content => "test"),
         context!(role => "user", content => "hello"),
     ],

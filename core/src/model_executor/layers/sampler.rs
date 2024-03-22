@@ -1,19 +1,16 @@
 use std::{
     collections::{BTreeMap, HashMap},
-    ops::Mul,
     sync::Arc,
 };
 
 use candle::{DType, Device, IndexOp, Tensor, D};
-use clap::ArgAction;
-use common::TensorCreator;
 
 use crate::{
     common::{
         sampling_params::{SamplingParams, SamplingType},
         sequence::{
-            PromptLogprobs, SampleLogprobs, SamplerOutput, SequenceData, SequenceDataRef,
-            SequenceGroupOutput, SequenceOutput,
+            PromptLogprobs, SampleLogprobs, SamplerOutput, SequenceDataRef, SequenceGroupOutput,
+            SequenceOutput,
         },
     },
     model_executor::{
@@ -28,7 +25,7 @@ use crate::{
 
 fn get_bin_counts_and_mask(
     cache: &mut TensorArena,
-    mut tokens: Tensor,
+    tokens: Tensor,
     vocab_size: usize,
     num_seqs: usize,
 ) -> candle::Result<(Tensor, Tensor)> {
@@ -146,13 +143,13 @@ fn apply_top_k_top_p(
     k: Tensor,
 ) -> candle::Result<Tensor> {
     let start = std::time::Instant::now();
-    let cuda_dev = match logits.device() {
-        Device::Cuda(cuda) => cuda.clone(),
-        _ => {
-            candle::bail!("")
-        }
-    };
-    cuda_dev.synchronize();
+    // let cuda_dev = match logits.device() {
+    //     Device::Cuda(cuda) => cuda.clone(),
+    //     _ => {
+    //         candle::bail!("")
+    //     }
+    // };
+    // let _ = cuda_dev.synchronize();
     let dim = logits.shape().dims().len() - 1;
     let (logits_sort, logits_idx) =
         tops::cuda_sort_(logits, dim, false, arena, std::ptr::null_mut())?;
@@ -217,7 +214,7 @@ fn apply_top_p_top_k(
     k: Tensor,
 ) -> candle::Result<Tensor> {
     let dim = logits.shape().dims().len() - 1;
-    let start = std::time::Instant::now();
+    let _start = std::time::Instant::now();
 
     let (logits_sort, logits_idx) =
         tops::cuda_sort_(logits, dim, true, arena, std::ptr::null_mut())?;
@@ -338,7 +335,7 @@ fn multinomial(mut probs: Tensor, num_samples: usize) -> candle::Result<Tensor> 
     //         }
     //     }
     // }
-    let start = std::time::Instant::now();
+    let _start = std::time::Instant::now();
     if num_samples > 1 {
         let shape0 = probs.shape().dims()[0];
         let shape1 = probs.shape().dims()[1];
@@ -439,7 +436,7 @@ fn beam_search_sample(
                 "Prompt input should have only one seq."
             );
             let parent_ids = [0_u32].repeat(2 * beam_width);
-            let datas = seq_group_logprobs
+            let _datas = seq_group_logprobs
                 .i(0)?
                 .to_dtype(DType::F32)?
                 .to_vec1::<f32>()?;
@@ -499,7 +496,7 @@ fn sample(
     let start = std::time::Instant::now();
 
     let mut categorized_seq_group_ids: Vec<Vec<usize>> = Vec::new();
-    for i in 0..=SamplingType::Beam as usize {
+    for _i in 0..=SamplingType::Beam as usize {
         categorized_seq_group_ids.push(Vec::new());
     }
     for (i, (_, sampling_params)) in sampling_metadata.seq_groups.iter().enumerate() {
@@ -565,9 +562,6 @@ fn sample(
                     // tracing::info!("beam1 result:{:?}", tmp.to_string());
                     beam_search_logprobs = Some(tmp);
                 }
-                _ => {
-                    candle::bail!("not supported sample type:{:?}", sample_type);
-                }
             }
         }
     }
@@ -577,7 +571,7 @@ fn sample(
     let mut sample_results_dict: BTreeMap<usize, (Vec<u32>, Vec<u32>)> = BTreeMap::new();
 
     for i in 0..=SamplingType::Beam as usize {
-        if let Some((seq_group_ids, seq_groups, is_prompts, sample_indices)) =
+        if let Some((seq_group_ids, seq_groups, is_prompts, _sample_indices)) =
             sample_metadata.get(&i)
         {
             let sample_type = SamplingType::from_int(i).unwrap();
@@ -597,9 +591,6 @@ fn sample(
                     &sampling_metadata.seq_data,
                     beam_search_logprobs.as_ref().unwrap(),
                 )?,
-                _ => {
-                    candle::bail!("not supported sample type:{:?}", sample_type);
-                }
             };
 
             for (key, val) in seq_group_ids.iter().zip(sample_results.into_iter()) {
@@ -610,7 +601,7 @@ fn sample(
     // tracing::info!("sampler 1 {:?}", start.elapsed());
 
     let mut result = Vec::new();
-    for (i, v) in sample_results_dict {
+    for (_i, v) in sample_results_dict {
         result.push(v);
     }
     metrics::histogram!("sample").record(start.elapsed().as_secs_f64());
@@ -716,7 +707,7 @@ fn get_logprobs(
 
         if i < sampling_metadata.num_prompts && sampling_params.prompt_logprobs.is_some() {
             let num_logprobs = sampling_params.prompt_logprobs.unwrap();
-            let prompt_len = sampling_metadata.prompt_lens[i];
+            let _prompt_len = sampling_metadata.prompt_lens[i];
             let seq_ref = sampling_metadata
                 .seq_data
                 .get(&seq_ids[0])
@@ -838,9 +829,9 @@ pub struct Sampler {
 
 impl Sampler {
     pub fn new(
-        max_batch: usize,
-        max_model_len: usize,
-        dtype: DType,
+        _max_batch: usize,
+        _max_model_len: usize,
+        _dtype: DType,
         device: &Device,
     ) -> candle::Result<Self> {
         Ok(Self {

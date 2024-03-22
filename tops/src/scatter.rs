@@ -1,15 +1,9 @@
 use candle::cuda_backend::cudarc::driver::sys::CUstream;
 use candle::shape::Dim;
-use candle::{CpuStorage, CudaStorage, DType, Device, Layout, Shape, Tensor};
-use common::{
-    ffi::get_scalar_type,
-    ffi::{CTensorView, ScalarType},
-};
+use candle::Tensor;
+use common::ffi::CTensorView;
 
-use std::os::raw::{c_uint, c_void};
-
-use crate::common::get_column_major_dim;
-use crate::cuda_sort;
+use std::os::raw::c_uint;
 
 extern "C" {
     fn cuda_scatter_tensor(
@@ -44,6 +38,8 @@ pub fn cuda_scatter<D: Dim>(
 
 #[test]
 fn test_sort() -> candle::Result<()> {
+    use super::cuda_sort;
+    use candle::{Device};
     let device = Device::new_cuda(0)?;
     let a = Tensor::new(
         &[

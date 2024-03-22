@@ -203,9 +203,9 @@ impl CacheEngine {
     //         }
     //     }
     // }
-    pub fn swap_in(&self, block_mapping: &HashMap<u32, u32>) -> Result<()> {
+    pub fn swap_in(&self, _block_mapping: &HashMap<u32, u32>) -> Result<()> {
         for i in 0..self.num_layers {
-            let (src_key_cache, src_value_cache) = self.cpu_cache.get(i).unwrap();
+            let (_src_key_cache, _src_value_cache) = self.cpu_cache.get(i).unwrap();
             // let mut gpu_cache = self.get_mut_gpu_cache();
             // let (dst_key_cache, dst_value_cache) = gpu_cache.get_mut(i).unwrap();
             // Self::swap_blocks(
@@ -228,9 +228,8 @@ impl CacheEngine {
             }
         }
         todo!("swap_in");
-        Ok(())
     }
-    pub fn swap_out(&self, block_mapping: &HashMap<u32, u32>) -> Result<()> {
+    pub fn swap_out(&self, _block_mapping: &HashMap<u32, u32>) -> Result<()> {
         for i in 0..self.num_layers {
             // let gpu_cache = self.get_mut_gpu_cache();
             // let (src_key_cache, src_value_cache) = gpu_cache.get(i).unwrap().clone();
@@ -257,9 +256,8 @@ impl CacheEngine {
             }
         }
         todo!("swap_out");
-        Ok(())
     }
-    pub fn copy(&self, block_mapping: &HashMap<u32, Vec<u32>>) -> Result<()> {
+    pub fn copy(&self, _block_mapping: &HashMap<u32, Vec<u32>>) -> Result<()> {
         // let mut gpu_cache = self.get_mut_gpu_cache();
         // let caches: (Vec<&mut Tensor>, Vec<&mut Tensor>) =
         //     gpu_cache.iter_mut().map(|(a, b)| (a, b)).unzip();
@@ -270,6 +268,5 @@ impl CacheEngine {
         //     value_cache_ptrs[layer_idx] = reinterpret_cast<int64_t>(value_caches[layer_idx].data_ptr());
         //   }
         todo!("copy");
-        Ok(())
     }
 }

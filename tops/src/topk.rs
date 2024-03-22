@@ -1,21 +1,19 @@
 use candle::cuda_backend::cudarc::driver::sys::CUstream;
-use candle::{shape::Dim, DType, Device, Shape, Tensor, D};
-use common::ffi::{CTensorView, ScalarType};
+use candle::{shape::Dim, DType, Shape, Tensor};
+use common::ffi::CTensorView;
 use common::{DefaultTensorCreator, TensorCreator};
-use libc::{c_int, c_uint, c_void};
-
-use crate::common::get_column_major_dim;
+use libc::c_int;
 
 extern "C" {
-    fn cuda_topk_tensor(
-        input: CTensorView,
-        topk: c_int,
-        dim: c_int,
-        topk_type: c_int,
-        stream: CUstream,
-        output: CTensorView,
-        indices: CTensorView,
-    );
+    // fn cuda_topk_tensor(
+    //     input: CTensorView,
+    //     topk: c_int,
+    //     dim: c_int,
+    //     topk_type: c_int,
+    //     stream: CUstream,
+    //     output: CTensorView,
+    //     indices: CTensorView,
+    // );
     fn cuda_topk_indices(
         input: CTensorView,
         k: c_int,
@@ -23,20 +21,20 @@ extern "C" {
         stream: CUstream,
         indices: CTensorView,
     );
-    fn cuda_dim_gather_tensor(
-        input: CTensorView,
-        dim: c_uint,
-        indices: CTensorView,
-        stream: CUstream,
-        output: CTensorView,
-    );
+    // fn cuda_dim_gather_tensor(
+    //     input: CTensorView,
+    //     dim: c_uint,
+    //     indices: CTensorView,
+    //     stream: CUstream,
+    //     output: CTensorView,
+    // );
 }
 
 pub fn cuda_topk(
     t: &Tensor,
     topk: usize,
     dim: usize,
-    stream: CUstream,
+    _stream: CUstream,
 ) -> candle::Result<(Tensor, Tensor)> {
     // let dim = get_column_major_dim(t.shape(), dim)?;
 
@@ -142,6 +140,7 @@ pub fn cuda_topk2_<F: TensorCreator, D: Dim>(
 }
 #[test]
 fn test_topk() -> candle::Result<()> {
+    use candle::{Device, D};
     let device = Device::new_cuda(0)?;
     let test = Tensor::rand(1_f32, 10.0, (2, 10), &device)?;
     println!("{}", test.to_string());

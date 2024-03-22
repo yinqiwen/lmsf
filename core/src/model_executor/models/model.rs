@@ -1,7 +1,7 @@
 use anyhow::Result;
 use candle::DType;
 use candle::Tensor;
-use std::sync::Arc;
+
 
 use super::ModelType;
 use crate::model_executor::input_metadata::InputMetadata;

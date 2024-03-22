@@ -1,10 +1,7 @@
 use candle::cuda_backend::cudarc::driver::sys::CUstream;
-use candle::{Device, Tensor, WithDType};
-use common::{
-    ffi::get_scalar_type,
-    ffi::{CTensorView, ScalarType},
-};
-use common::{DefaultTensorCreator, TensorCreator};
+use candle::{Tensor, WithDType};
+use common::ffi::CTensorView;
+
 use libc::{c_double, c_longlong};
 
 extern "C" {
@@ -89,7 +86,8 @@ pub fn cuda_masked_fill_neg_inf_(on_false: &Tensor, mask: &Tensor) -> candle::Re
 
 #[test]
 fn test_masked_fill() -> candle::Result<()> {
-    let device = Device::new_cuda(0)?;
+    use candle::Device;
+    let _device = Device::new_cuda(0)?;
     // let a = cuda_arange(0_u32, 100, &device)?;
     // println!("{}", a.to_string());
     Ok(())

@@ -1,7 +1,7 @@
 use candle::{DType, Device, Tensor, D};
 
 use crate::model_executor::input_metadata::InputMetadata;
-use common::{DefaultTensorCreator, TensorCreator};
+use common::TensorCreator;
 
 use super::Cache;
 
@@ -57,10 +57,10 @@ impl PagedAttention {
         sliding_window: Option<usize>,
         alibi_slopes: Option<Vec<f64>>,
     ) -> candle::Result<Self> {
-        let cuda_device = if let Device::Cuda(cuda_dev) = &device {
+        let _cuda_device = if let Device::Cuda(cuda_dev) = &device {
             cuda_dev
         } else {
-            return Err(candle::bail!("no cuda device"));
+            candle::bail!("no cuda device")
         };
         // let cache_ops = CacheOps::new(cuda_device)?;
         // let attention_ops = PagedAttentionOps::new(cuda_device)?;
@@ -108,7 +108,7 @@ impl PagedAttention {
         &self,
         batch_size: usize,
         seq_len: usize,
-        hidden_size: usize,
+        _hidden_size: usize,
         query: Tensor, //[batch_size*seq_len, num_attention_heads,  head_size]
         key: Tensor,   //[batch_size*seq_len, num_attention_heads,  head_size]
         value: Tensor, //[batch_size*seq_len, num_attention_heads,  head_size]
@@ -164,10 +164,10 @@ impl PagedAttention {
         query: &Tensor, //[batch_size, seq_len, num_heads * head_size]
         key: &Tensor,   //[batch_size, seq_len, num_heads * head_size]
         value: &Tensor, //[batch_size, seq_len, num_heads * head_size]
-        mut key_cache: Option<&Tensor>,
-        mut value_cache: Option<&Tensor>,
+        key_cache: Option<&Tensor>,
+        value_cache: Option<&Tensor>,
         input_metadata: &mut InputMetadata,
-        dtype: DType,
+        _dtype: DType,
         log_enable: bool,
         tensor_creator: &mut F,
     ) -> candle::Result<Tensor> {
@@ -181,9 +181,9 @@ impl PagedAttention {
             // );
         }
         let (batch_size, seq_len, hidden_size) = query.shape().dims3()?;
-        let mut query = query.reshape(((), self.num_attention_heads, self.head_dim))?;
-        let mut key = key.reshape(((), self.num_kv_heads, self.head_dim))?;
-        let mut value = value.reshape(((), self.num_kv_heads, self.head_dim))?;
+        let query = query.reshape(((), self.num_attention_heads, self.head_dim))?;
+        let key = key.reshape(((), self.num_kv_heads, self.head_dim))?;
+        let value = value.reshape(((), self.num_kv_heads, self.head_dim))?;
         if key_cache.as_ref().is_some_and(|_| value_cache.is_some()) {
             let slot_mapping = input_metadata.slot_mapping.flatten_all()?;
             // candle_paged_attention::reshape_and_cache(
@@ -208,7 +208,7 @@ impl PagedAttention {
         } else {
             match (key_cache, value_cache) {
                 (Some(key_cache), Some(value_cache)) => {
-                    let max_context_len = input_metadata.max_context_len.unwrap();
+                    let _max_context_len = input_metadata.max_context_len.unwrap();
                     self.paged_attention(
                         &query,
                         key_cache,

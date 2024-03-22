@@ -1,11 +1,6 @@
-use std::ops::Deref;
-
 use candle::{
-    cuda_backend::cudarc::driver::{
-        result::{memcpy_dtod_async, memcpy_dtoh_async, memcpy_htod_async},
-        CudaFunction, CudaSlice, CudaStream, DevicePtr, DeviceRepr, LaunchAsync, LaunchConfig,
-    },
-    CpuStorage, CudaDevice, DType, Device, IndexOp, Layout, Shape, Storage, Tensor, D,
+    cuda_backend::cudarc::driver::DeviceRepr, CpuStorage, DType, Device, IndexOp, Layout, Shape,
+    Tensor, D,
 };
 
 struct ArgSort;
@@ -144,7 +139,7 @@ fn test_tesnor_cat() -> candle::Result<()> {
     cuda_dev.synchronize();
     let (after_free, _) = candle::cuda_backend::cudarc::driver::result::mem_get_info().unwrap();
     println!("Create 2 tensors use gpu mem:{}", before_free - after_free,);
-    let c = Tensor::cat(&[&a, &b], 0)?;
+    let _c = Tensor::cat(&[&a, &b], 0)?;
     cuda_dev.synchronize();
     let (after_free, _) = candle::cuda_backend::cudarc::driver::result::mem_get_info().unwrap();
     println!(
@@ -177,7 +172,7 @@ fn test_create_tesnor() -> candle::Result<()> {
     let cuda_dev = Device::new_cuda(0)?;
     let v: Vec<f32> = vec![0.8, 1.2, 3.4];
     let start = std::time::Instant::now();
-    let tensor = Tensor::new(v, &cuda_dev).unwrap();
+    let _tensor = Tensor::new(v, &cuda_dev).unwrap();
     println!("cost {:?} to create cuda tensor", start.elapsed());
     Ok(())
 }
@@ -251,7 +246,7 @@ fn test_sub1() -> candle::Result<()> {
 #[test]
 fn test_cuda_kernels_launc() -> candle::Result<()> {
     let device = candle::Device::new_cuda(0).unwrap();
-    let cuda_device = if let candle::Device::Cuda(cuda_dev) = &device {
+    let _cuda_device = if let candle::Device::Cuda(cuda_dev) = &device {
         cuda_dev
     } else {
         unimplemented!("unreach");
@@ -355,7 +350,7 @@ fn test_varbb() -> candle::Result<()> {
         candle_nn::VarBuilder::from_mmaped_safetensors(&model_weight_files, DType::F16, &device)?
     };
     let test_tensor0 = vb.pp("model.layers.1.self_attn.q_proj");
-    let test_tensor0 = test_tensor0.get(((5120_usize, 640_usize)), "qweight")?; // failed to get tensor with wrong dtype
+    let test_tensor0 = test_tensor0.get((5120_usize, 640_usize), "qweight")?; // failed to get tensor with wrong dtype
     println!("{:?}", test_tensor0.dtype());
 
     let test_tensor1 = vb.pp("model.layers.0.input_layernorm");
@@ -367,7 +362,7 @@ fn test_varbb() -> candle::Result<()> {
 
 #[test]
 fn test_safetensor() -> candle::Result<()> {
-    let device = candle::Device::new_cuda(0).unwrap();
+    let _device = candle::Device::new_cuda(0).unwrap();
 
     let model_weight_files = vec!["/data2/models/Llama-2-13B-chat-AWQ/model.safetensors"];
     let tensors = unsafe { candle::safetensors::MmapedSafetensors::new(model_weight_files[0])? };
@@ -431,7 +426,7 @@ unsafe impl DeviceRepr for TestStruct {}
 // }
 
 fn test_x(arg: Option<&str>) {
-    let x = if let Some(v) = arg { v } else { "" };
+    let _x = if let Some(v) = arg { v } else { "" };
 
     // let s = match x {
     //     "1" => 1,

@@ -1,14 +1,11 @@
-use candle::cuda_backend::cudarc::driver::{DevicePtr, DeviceRepr, LaunchAsync};
 use candle::cuda_backend::WrapErr;
 use candle::{
-    backend::BackendStorage, cuda_backend::cudarc::driver::LaunchConfig, shape::Dim, CpuStorage,
-    CudaStorage, DType, Layout, Shape, Storage,
+    cuda_backend::cudarc::driver::{LaunchAsync, LaunchConfig},
+    DType,
 };
 use candle::{Device, Tensor};
 use common::cuda_ext::get_tensor_cuda_device_ptr;
 use common::{DefaultTensorCreator, TensorCreator};
-
-use std::ops::Deref;
 
 fn kernel_name(root: &str, dtype: DType) -> String {
     let dtype = dtype.as_str();
@@ -20,29 +17,6 @@ fn kernel2_name(root: &str, lhs_dtype: DType, rhs_dtype: DType) -> String {
     let rhs_dtype = rhs_dtype.as_str();
     format!("{root}_{lhs_dtype}_{rhs_dtype}")
 }
-
-// fn cuda_inplace_binary_op(a: &Tensor, b: &Tensor, c: &Tensor, op: &str) -> candle_core::Result<()> {
-//     let device = match a.device() {
-//         Device::Cuda(cuda_dev) => cuda_dev,
-//         _ => {
-//             candle_core::bail!("unexpected device")
-//         }
-//     };
-//     let shape = a.shape();
-//     let func = device.get_or_load_func(&kernel_name(op, a.dtype()), candle_kernels::BINARY)?;
-//     let dims = shape.dims();
-//     let elem_count = shape.elem_count();
-//     let dims_and_strides = device
-//         .htod_copy([dims, a.stride(), b.stride()].concat())
-//         .w()?;
-//     let cfg = LaunchConfig::for_num_elems(elem_count as u32);
-//     let lhs = get_tensor_cuda_device_ptr(a)?;
-//     let rhs = get_tensor_cuda_device_ptr(b)?;
-//     let out = get_tensor_cuda_device_ptr(c)?;
-//     let params = (elem_count, dims.len(), &dims_and_strides, lhs, rhs, out);
-//     unsafe { func.launch(cfg, params) }.w()?;
-//     Ok(())
-// }
 
 pub fn cuda_div_(a: &Tensor, b: &Tensor) -> candle::Result<()> {
     cuda_binary_op(a, b, a, "bdiv")

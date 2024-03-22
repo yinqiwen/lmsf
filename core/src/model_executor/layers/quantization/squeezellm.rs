@@ -1,8 +1,8 @@
 use super::QuantizationConfig;
 use crate::model_executor::layers::linear::LinearWeights;
 use crate::model_executor::layers::WeightRegistry;
-use candle::{DType, Device, Shape, Tensor, D};
-use common::{DefaultTensorCreator, TensorCreator};
+use candle::{DType, Shape, Tensor};
+use common::TensorCreator;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
@@ -32,7 +32,7 @@ impl QuantizationConfig for SqueezeLLMConfig {
         vec![]
     }
 
-    fn from_json(mut val: serde_json::Value) -> candle::Result<Self> {
+    fn from_json(val: serde_json::Value) -> candle::Result<Self> {
         let cfg_dict = val
             .as_object()
             .ok_or(candle::Error::Msg("invalid json".to_string()))?;
@@ -42,7 +42,7 @@ impl QuantizationConfig for SqueezeLLMConfig {
                 .as_u64()
                 .ok_or(candle::Error::Msg("invalid json with 'wbits'".to_string()))?
         } else {
-            return candle::bail!("no wbits found in json");
+            candle::bail!("no wbits found in json")
         } as usize;
 
         Self::new(wbits)
@@ -52,7 +52,7 @@ impl QuantizationConfig for SqueezeLLMConfig {
 impl SqueezeLLMConfig {
     pub fn new(weight_bits: usize) -> candle::Result<Self> {
         if weight_bits != 4 {
-            return candle::bail!("Currently, only 4-bit weight quantization is supported for SqueezeLLM, but got {weight_bits} bits.");
+            candle::bail!("Currently, only 4-bit weight quantization is supported for SqueezeLLM, but got {weight_bits} bits.")
         }
         let pack_factor = 32 / weight_bits;
         Ok(Self {

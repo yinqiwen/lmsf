@@ -1,6 +1,6 @@
 //use candle-rotary instead
 
-use candle::cuda_backend::cudarc::driver::{DevicePtr, DeviceRepr};
+
 use candle::{cuda_backend::cudarc::driver::sys::CUstream, DType, Device, Tensor, D};
 use common::{cuda_ext::get_tensor_cuda_device_ptr, ffi::get_scalar_type, ffi::ScalarType};
 use libc::c_void;
