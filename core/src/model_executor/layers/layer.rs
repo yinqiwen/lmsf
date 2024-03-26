@@ -1,12 +1,6 @@
-
-
-use candle::{Tensor};
+use candle::Tensor;
 
 use common::{DefaultTensorCreator, TensorCreator};
-
-
-
-
 
 pub type WeightDesc = (&'static str, usize, usize);
 pub trait Layer: Sized {

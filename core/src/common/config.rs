@@ -76,6 +76,9 @@ pub struct EngineArgs {
     )]
     gpu_memory_utilization: f32,
 
+    #[clap(long, help = "'the datatype to use for model")]
+    dtype: Option<DType>,
+
     #[clap(long, help = "log dir")]
     pub log_dir: Option<String>,
 
@@ -89,6 +92,7 @@ impl EngineArgs {
     ) -> Result<(ModelConfig, CacheConfig, ParallelConfig, SchedulerConfig)> {
         let model_cfg = ModelConfig::new(
             self.model.as_str(),
+            self.dtype,
             self.quantization,
             self.max_model_len,
             self.seed,
@@ -121,14 +125,15 @@ pub struct ModelConfig {
     quantize_type: Option<QuantizeType>,
     model_weight_files: Vec<String>,
     path: String,
-    dtype: DType,
     max_model_len: usize,
+    dtype: Option<DType>,
     pub(crate) seed: u64,
 }
 
 impl ModelConfig {
     pub fn new(
         model_path: &str,
+        model_dtype: Option<DType>,
         quantize_type: Option<QuantizeType>,
         max_model_len: Option<usize>,
         seed: u64,
@@ -137,7 +142,7 @@ impl ModelConfig {
 
         let modle_cfg = ModelFactory::new_model_config(model_path, quantize_type)?;
 
-        let dtype = modle_cfg.get_dtype()?;
+        let _dtype = modle_cfg.get_dtype()?;
         let max_len = if let Some(n) = max_model_len {
             if n > modle_cfg.max_model_len() {
                 return Err(
@@ -156,8 +161,8 @@ impl ModelConfig {
             quantize_type,
             model_weight_files,
             path: String::from(model_path),
-            dtype,
             max_model_len: max_len,
+            dtype: model_dtype,
             seed,
         })
     }
@@ -174,12 +179,17 @@ impl ModelConfig {
         &self.model_weight_files
     }
     pub fn get_dtype(&self) -> DType {
-        self.dtype
+        match self.dtype {
+            Some(dtype) => dtype,
+            None => self.get_model_dtype(),
+        }
+    }
+    pub fn get_model_dtype(&self) -> DType {
+        self.cfg.get_dtype().unwrap()
     }
     pub fn get_max_model_len(&self) -> usize {
         self.max_model_len
     }
-
     pub fn head_size(&self) -> usize {
         self.cfg.hidden_size() / self.cfg.num_attention_heads()
     }
@@ -203,9 +213,9 @@ impl ModelConfig {
         self.cfg.get_vocab_size()
     }
 
-    pub fn get_bos_token_id(&self) -> u32 {
-        self.cfg.get_bos_token_id()
-    }
+    // pub fn get_bos_token_id(&self) -> u32 {
+    //     self.cfg.get_bos_token_id()
+    // }
     pub fn get_eos_token_id(&self) -> u32 {
         self.cfg.get_eos_token_id()
     }

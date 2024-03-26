@@ -7,7 +7,10 @@ Rust LLM Serving Framework
 -  Quantization
    - awq
    - squeezellm
-
+-  Models
+   - llama
+   - gemma
+   - chatglm
 
 # Getting Started
 

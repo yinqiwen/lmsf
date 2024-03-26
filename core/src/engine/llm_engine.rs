@@ -91,8 +91,13 @@ impl LLMEngine {
         let chat_template = ModelFactory::get_chat_template(model_path)?;
 
         let tokenizer_filename = format!("{}/tokenizer.json", model_path);
+        let tokenizer_pretrained = format!("{}/tokenizer.model", model_path);
+
         // let tokenizer_config_filename = format!("{}/tokenizer_config.json", model_path);
-        let tokenizer = Tokenizer::from_file(tokenizer_filename).map_err(anyhow::Error::msg)?;
+        let tokenizer = Tokenizer::from_file(tokenizer_filename).map_err(|e| {
+            tracing::error!("Failed to load tokenizer:{}", e);
+            anyhow!("{}", e)
+        })?;
 
         // let tokenizer_config = ModelFactory::load_tokenizer_config(
         //     model_config.inner().get_model_type(),

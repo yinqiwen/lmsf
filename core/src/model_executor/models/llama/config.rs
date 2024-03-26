@@ -1,34 +1,7 @@
 use anyhow::{anyhow, Result};
 use candle::DType;
 
-
-
-
-
-
 use crate::model_executor::models::{ModelConfig, ModelType};
-
-// #[derive(Debug, serde::Deserialize, serde::Serialize)]
-// struct LlamaEosTokenConfig {
-//     content: String,
-//     lstrip: bool,
-//     normalized: bool,
-//     rstrip: bool,
-//     single_word: bool,
-// }
-// #[derive(Debug, serde::Deserialize, serde::Serialize)]
-// pub(crate) struct LlamaTokenizerConfig {
-//     eos_token: LlamaEosTokenConfig,
-//     chat_template: Option<String>,
-// }
-// impl TokenizerConfig for LlamaTokenizerConfig {
-//     fn get_eos_token(&self) -> &str {
-//         &self.eos_token.content
-//     }
-//     fn get_chat_template(&self) -> Option<&str> {
-//         self.chat_template.as_ref().map(|s| s.as_str())
-//     }
-// }
 
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
 pub(crate) struct LlamaConfig {
@@ -84,9 +57,9 @@ impl ModelConfig for LlamaConfig {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
-    fn get_bos_token_id(&self) -> u32 {
-        self.bos_token_id
-    }
+    // fn get_bos_token_id(&self) -> u32 {
+    //     self.bos_token_id
+    // }
     fn get_eos_token_id(&self) -> u32 {
         self.eos_token_id
     }

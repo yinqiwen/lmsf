@@ -6,6 +6,7 @@ mod tensor_ext;
 mod tracing;
 mod unsafe_tensor;
 
+pub use cuda_ext::cuda_synchronize;
 pub use metrics::MetricsBuilder;
 pub use tensor_ext::{DefaultTensorCreator, TensorCreator};
 pub use tracing::init_tracing;

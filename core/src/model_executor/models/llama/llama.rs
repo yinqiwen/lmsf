@@ -6,7 +6,8 @@ use super::LlamaConfig as Config;
 use crate::model_executor::input_metadata::InputMetadata;
 use crate::model_executor::layers::{Cache, Layer};
 use crate::model_executor::layers::{
-    ColumnParallelLinear, LinearWeights, PagedAttention, QKVParallelLinear, RotaryEmbedding,
+    ColumnParallelLinear, LinearWeights, MergedColumnParallelLinear, PagedAttention,
+    QKVParallelLinear, RotaryEmbedding, RowParallelLinear,
 };
 use crate::model_executor::layers::{Embedding, UnquantizedLinearWeights};
 use crate::model_executor::models::Model;
@@ -15,81 +16,6 @@ use crate::tensor::TensorArena;
 use common::{DefaultTensorCreator, TensorCreator};
 
 pub const MAX_SEQ_LEN: usize = 4096;
-
-// #[derive(Deserialize)]
-// pub struct LlamaConfig {
-//     pub hidden_size: usize,
-//     pub intermediate_size: usize,
-//     pub vocab_size: usize,
-//     pub num_hidden_layers: usize,
-//     pub num_attention_heads: usize,
-//     pub num_key_value_heads: Option<usize>,
-//     pub rms_norm_eps: f64,
-//     #[serde(default = "default_rope")]
-//     pub rope_theta: f32,
-// }
-
-// fn default_rope() -> f32 {
-//     10_000.0
-// }
-
-// impl LlamaConfig {
-//     pub fn into_config(self, use_flash_attn: bool) -> Config {
-//         Config {
-//             hidden_size: self.hidden_size,
-//             intermediate_size: self.intermediate_size,
-//             vocab_size: self.vocab_size,
-//             num_hidden_layers: self.num_hidden_layers,
-//             num_attention_heads: self.num_attention_heads,
-//             num_key_value_heads: self.num_key_value_heads.unwrap_or(self.num_attention_heads),
-//             rms_norm_eps: self.rms_norm_eps,
-//             rope_theta: self.rope_theta,
-//             use_flash_attn,
-//         }
-//     }
-// }
-
-// pub struct Config {
-//     pub hidden_size: usize,
-//     pub intermediate_size: usize,
-//     pub vocab_size: usize,
-//     pub num_hidden_layers: usize,
-//     pub num_attention_heads: usize,
-//     pub num_key_value_heads: usize,
-//     pub use_flash_attn: bool,
-//     pub rms_norm_eps: f64,
-//     pub rope_theta: f32,
-// }
-
-// impl Config {
-//     pub fn config_7b_v1(use_flash_attn: bool) -> Self {
-//         Self {
-//             hidden_size: 4096,
-//             intermediate_size: 11008,
-//             vocab_size: 32000,
-//             num_hidden_layers: 32,
-//             num_attention_heads: 32,
-//             num_key_value_heads: 32,
-//             use_flash_attn,
-//             rms_norm_eps: 1e-6,
-//             rope_theta: 10_000.0,
-//         }
-//     }
-
-//     pub fn config_7b_v2(use_flash_attn: bool) -> Self {
-//         Self {
-//             hidden_size: 4096,
-//             intermediate_size: 11008,
-//             vocab_size: 32000,
-//             num_hidden_layers: 32,
-//             num_attention_heads: 32,
-//             num_key_value_heads: 32,
-//             use_flash_attn,
-//             rms_norm_eps: 1e-5,
-//             rope_theta: 10_000.0,
-//         }
-//     }
-// }
 
 fn embedding(cfg: &Config, vb: VarBuilder) -> Result<Embedding> {
     let embeddings = vb.get((cfg.vocab_size, cfg.hidden_size), "weight")?;
@@ -123,7 +49,7 @@ struct CausalSelfAttention<W: LinearWeights> {
     // qkv_proj: QKVLinear,
     // o_proj: crate::model_executor::layers::Linear,
     qkv_proj: QKVParallelLinear<W>,
-    o_proj: ColumnParallelLinear<W>,
+    o_proj: RowParallelLinear<W>,
     num_attention_heads: usize,
     num_key_value_heads: usize,
     head_dim: usize,
@@ -133,22 +59,6 @@ struct CausalSelfAttention<W: LinearWeights> {
     span_rot: tracing::Span,
     // t: Option<W>,
 }
-
-// #[cfg(feature = "flash-attn")]
-// fn flash_attn(
-//     q: &Tensor,
-//     k: &Tensor,
-//     v: &Tensor,
-//     softmax_scale: f32,
-//     causal: bool,
-// ) -> Result<Tensor> {
-//     candle_flash_attn::flash_attn(q, k, v, softmax_scale, causal)
-// }
-
-// #[cfg(not(feature = "flash-attn"))]
-// fn flash_attn(_: &Tensor, _: &Tensor, _: &Tensor, _: f32, _: bool) -> Result<Tensor> {
-//     unimplemented!("compile with '--features flash-attn'")
-// }
 
 impl<W: LinearWeights> CausalSelfAttention<W> {
     fn forward(
@@ -246,38 +156,40 @@ impl<W: LinearWeights> CausalSelfAttention<W> {
     ) -> Result<Self> {
         let span = tracing::span!(tracing::Level::TRACE, "attn");
         let span_rot = tracing::span!(tracing::Level::TRACE, "attn-rot");
-        let size_in = cfg.hidden_size;
-        let size_q = (cfg.hidden_size / cfg.num_attention_heads) * cfg.num_attention_heads;
-        let _size_kv = (cfg.hidden_size / cfg.num_attention_heads) * cfg.num_key_value_heads;
+        // let size_in = cfg.hidden_size;
+        // let size_q = (cfg.hidden_size / cfg.num_attention_heads) * cfg.num_attention_heads;
+        // let _size_kv = (cfg.hidden_size / cfg.num_attention_heads) * cfg.num_key_value_heads;
+        let hidden_size = cfg.hidden_size;
+        let tp_size = parallel_state.get_tensor_model_parallel_world_size();
+        let total_num_heads = cfg.num_attention_heads;
+        let _num_heads = total_num_heads / tp_size;
+        let total_num_kv_heads = cfg.num_key_value_heads;
 
-        let head_size = cfg.hidden_size / cfg.num_attention_heads;
-        let qkv_proj = QKVParallelLinear::<W>::load(
-            &vb,
-            cfg.hidden_size,
-            head_size,
-            cfg.num_attention_heads,
-            Some(cfg.num_key_value_heads),
-            &["q_proj", "k_proj", "v_proj"],
+        let _num_kv_heads = std::cmp::max(1, total_num_kv_heads / tp_size);
+        let head_dim = hidden_size / total_num_heads;
+
+        // self.q_size = self.num_heads * self.head_dim
+        // self.kv_size = self.num_kv_heads * self.head_dim
+        // self.scaling = self.head_dim**-0.5
+        // self.rope_theta = rope_theta
+        // self.max_position_embeddings = max_position_embeddings
+
+        let _head_size = cfg.hidden_size / cfg.num_attention_heads;
+        let qkv_proj = QKVParallelLinear::<W>::new(
+            hidden_size,
+            head_dim,
+            total_num_heads,
+            Some(total_num_kv_heads),
             parallel_state,
-            config.clone(),
-        )?;
+        )
+        .load(&vb, &["q_proj", "k_proj", "v_proj"], config.clone(), true)?;
 
-        let o_proj = ColumnParallelLinear::<W>::load(
-            vb.pp("o_proj"),
-            size_q,
-            size_in,
-            parallel_state,
-            config,
-        )?;
-
-        // let o_proj =
-        //     crate::model_executor::layers::linear_no_bias(size_q, size_in, vb.pp("o_proj"))?;
+        let o_proj =
+            RowParallelLinear::<W>::new(total_num_heads * head_dim, hidden_size, parallel_state)
+                .load(&vb.pp("o_proj"), config)?;
 
         let head_dim = cfg.hidden_size / cfg.num_attention_heads;
         Ok(Self {
-            // q_proj,
-            // k_proj,
-            // v_proj,
             qkv_proj,
             o_proj,
             num_attention_heads: cfg.num_attention_heads,
@@ -296,7 +208,6 @@ impl<W: LinearWeights> CausalSelfAttention<W> {
                 vb.device(),
                 vb.dtype(),
                 head_dim,
-                cfg.num_key_value_heads,
                 head_dim,
                 MAX_SEQ_LEN,
                 10000.0,
@@ -309,20 +220,13 @@ impl<W: LinearWeights> CausalSelfAttention<W> {
     }
 }
 
-fn masked_fill(on_false: &Tensor, mask: &Tensor, on_true: f32) -> Result<Tensor> {
-    let shape = mask.shape();
-    let on_true = Tensor::new(on_true, on_false.device())?.broadcast_as(shape.dims())?;
-    let m = mask.where_cond(&on_true, on_false)?;
-    Ok(m)
-}
-
 struct Mlp<W: LinearWeights> {
     // c_fc1: crate::model_executor::layers::Linear,
     // c_fc2: crate::model_executor::layers::Linear,
     // gate_up: crate::model_executor::layers::Linear,
     // c_proj: crate::model_executor::layers::Linear,
-    gate_up: ColumnParallelLinear<W>,
-    c_proj: ColumnParallelLinear<W>,
+    gate_up: MergedColumnParallelLinear<W>,
+    c_proj: RowParallelLinear<W>,
     span: tracing::Span,
     // t: Option<W>,
 }
@@ -343,19 +247,6 @@ impl<W: LinearWeights> Mlp<W> {
         let x = vllm::silu_and_mul_(&x, tensor_creator)?;
         self.c_proj.forward_(&x, tensor_creator)
     }
-    fn forward(&self, x: &Tensor, log_enable: bool) -> Result<Tensor> {
-        let _enter = self.span.enter();
-        // let x1 = self.c_fc1.forward(x)?;
-        // let x2 = self.c_fc2.forward(x)?;
-        let x = self.gate_up.forward(x)?;
-
-        if log_enable {
-            // tracing::info!("after gateup:{}\n{}", x1.to_string(), x2.to_string());
-        }
-        let x = vllm::silu_and_mul(&x)?;
-
-        self.c_proj.forward(&x)
-    }
 
     fn load(
         vb: VarBuilder,
@@ -366,33 +257,15 @@ impl<W: LinearWeights> Mlp<W> {
         let span = tracing::span!(tracing::Level::TRACE, "mlp");
         let h_size = cfg.hidden_size;
         let i_size = cfg.intermediate_size;
-        let gate_up = ColumnParallelLinear::<W>::merge_load(
-            &vb,
+        let gate_up = MergedColumnParallelLinear::<W>::new(
             h_size,
             &[i_size, i_size],
-            &["gate_proj", "up_proj"],
             parallel_state,
-            config.clone(),
-        )?;
-        let c_proj = ColumnParallelLinear::<W>::load(
-            vb.pp("down_proj"),
-            i_size,
-            h_size,
-            parallel_state,
-            config,
-        )?;
-        // let gate_up = crate::model_executor::layers::Linear::load_multi(
-        //     &vb,
-        //     h_size,
-        //     i_size,
-        //     &["gate_proj", "up_proj"],
-        // )?;
-        // let c_proj =
-        //     crate::model_executor::layers::linear_no_bias(i_size, h_size, vb.pp("down_proj"))?;
-
+        )
+        .load(&vb, &["gate_proj", "up_proj"], config.clone(), true)?;
+        let c_proj = RowParallelLinear::<W>::new(i_size, h_size, parallel_state)
+            .load(&vb.pp("down_proj"), config)?;
         Ok(Self {
-            // c_fc1,
-            // c_fc2,
             gate_up,
             c_proj,
             span,
@@ -465,39 +338,6 @@ impl<W: LinearWeights> Block<W> {
             .forward_(&hidden_states, self.idx == 0, tensor_creator)?;
         Ok((hidden_states, residual))
     }
-    fn forward(
-        &self,
-        hidden_states: Tensor,
-        positions: &Tensor,
-        residual: Option<Tensor>,
-        cache: Option<(&Tensor, &Tensor)>,
-        input_metadata: &mut InputMetadata,
-    ) -> Result<(Tensor, Tensor)> {
-        let (hidden_states, residual) = match residual {
-            Some(residual) => {
-                self.rms_1.forward_residual_(&hidden_states, &residual)?;
-                (hidden_states, residual)
-            }
-            None => {
-                let new_hidden_states = self.rms_1.forward(&hidden_states)?;
-                let residual = hidden_states;
-                (new_hidden_states, residual)
-            }
-        };
-
-        let hidden_states = self.attn.forward(
-            &hidden_states,
-            positions,
-            input_metadata,
-            cache,
-            self.idx == 0,
-        )?;
-        self.rms_2.forward_residual_(&hidden_states, &residual)?;
-
-        // let start = std::time::Instant::now();
-        let hidden_states = self.mlp.forward(&hidden_states, self.idx == 0)?;
-        Ok((hidden_states, residual))
-    }
 
     fn load(
         vb: VarBuilder,
@@ -519,12 +359,17 @@ impl<W: LinearWeights> Block<W> {
 
         let mlp = Mlp::<W>::load(vb.pp("mlp"), cfg, parallel_state, config)?;
 
-        let rms_1 =
-            vllm::RmsNorm::load(cfg.hidden_size, cfg.rms_norm_eps, vb.pp("input_layernorm"))?;
+        let rms_1 = vllm::RmsNorm::load(
+            cfg.hidden_size,
+            cfg.rms_norm_eps,
+            None,
+            vb.pp("input_layernorm"),
+        )?;
 
         let rms_2 = vllm::RmsNorm::load(
             cfg.hidden_size,
             cfg.rms_norm_eps,
+            None,
             vb.pp("post_attention_layernorm"),
         )?;
 
@@ -639,15 +484,15 @@ impl<W: LinearWeights> Llama<W> {
     ) -> Result<Self> {
         let wte = embedding(cfg, vb.pp("model.embed_tokens"))?;
         //let lm_head = linear(cfg.hidden_size, cfg.vocab_size, vb.pp("lm_head"))?;
-        let lm_head = ColumnParallelLinear::<UnquantizedLinearWeights>::load(
-            vb.pp("lm_head"),
+        let lm_head = ColumnParallelLinear::<UnquantizedLinearWeights>::new(
             cfg.hidden_size,
             cfg.vocab_size,
             parallel_state,
-            None,
-        )?;
+        )
+        .load(&vb.pp("lm_head"), None)?;
 
-        let ln_f = vllm::RmsNorm::load(cfg.hidden_size, cfg.rms_norm_eps, vb.pp("model.norm"))?;
+        let ln_f =
+            vllm::RmsNorm::load(cfg.hidden_size, cfg.rms_norm_eps, None, vb.pp("model.norm"))?;
         let blocks: Vec<_> = (0..cfg.num_hidden_layers)
             .map(|i| {
                 Block::<W>::load(

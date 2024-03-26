@@ -25,10 +25,13 @@ metrics = "0.22.1"
 metrics-util = "0.16.2"
 # candle-core = { version = "0.4.1" }
 # candle = { package = "candle-core", version = "0.4.1" }
-candle = { package = "candle-core", git = "https://github.com/yinqiwen/candle.git", branch = "get_with_dtype" }
-candle-kernels = { version = "0.4.1" }
+# candle = { package = "candle-core", git = "https://github.com/yinqiwen/candle.git", branch = "get_with_dtype" }
+candle = { package = "candle-core", path = "/data/dev/rust/candle/candle-core" }
+# candle-kernels = { version = "0.4.1" }
+candle-kernels = { path = "/data/dev/rust/candle/candle-kernels" }
+candle-nn = { path = "/data/dev/rust/candle/candle-nn" }
 # candle-nn = { version = "0.4.1" }
-candle-nn = { git = "https://github.com/yinqiwen/candle.git", branch = "get_with_dtype" }
+# candle-nn = { git = "https://github.com/yinqiwen/candle.git", branch = "get_with_dtype" }
 candle-transformers = { version = "0.4.1" }
 # candle-flash-attn = { git = "https://github.com/huggingface/candle-flash-attn-v1.git", package = "candle-flash-attn-v1" }
 # candle-flash-attn = { path = "/data/dev/rust/candle-flash-attn-v1", package = "candle-flash-attn-v1" }

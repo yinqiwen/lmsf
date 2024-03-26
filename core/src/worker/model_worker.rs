@@ -52,9 +52,16 @@ impl Worker {
         };
         // let cache_ops = CacheOps::new(cuda_device)?;
         //CacheEngine::new(cache_config, model_config.clone(), parallel_config.clone())?;
+
+        let convert_dtype = if model_config.get_dtype() == model_config.get_model_dtype() {
+            None
+        } else {
+            Some(model_config.get_dtype())
+        };
         let model = ModelFactory::load_model(
             model_config.path(),
             model_config.get_quantize_type(),
+            convert_dtype,
             model_config.inner(),
             &filenames,
             &device,
@@ -64,12 +71,7 @@ impl Worker {
         let (free, total) = candle::cuda_backend::cudarc::driver::result::mem_get_info()?;
         tracing::info!("GPU free:{}, total:{} after load model.", free, total);
 
-        let sampler = Sampler::new(
-            256,
-            model_config.get_max_model_len(),
-            model_config.get_dtype(),
-            &device,
-        )?;
+        let sampler = Sampler::new(&device)?;
         let cache_engine = CacheEngine::new(
             cuda_device,
             cache_config,

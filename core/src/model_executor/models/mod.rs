@@ -1,3 +1,4 @@
+mod chatglm;
 mod gemma;
 mod llama;
 mod model;

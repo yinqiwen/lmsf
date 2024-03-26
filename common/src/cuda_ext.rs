@@ -88,3 +88,14 @@ pub fn cuda_get_default_stream(device: &Device) -> candle::Result<sys::CUstream>
         }
     }
 }
+
+pub fn cuda_synchronize(device: &Device) {
+    match device {
+        Device::Cuda(cuda) => {
+            let _ = cuda.synchronize();
+        }
+        _ => {
+            //do nothing
+        }
+    }
+}

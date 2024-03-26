@@ -77,6 +77,14 @@ fn test_copy() -> candle::Result<()> {
     println!("x {:?}", x.to_string());
     println!("test1 {:?}", test1.to_string());
     println!("test {:?}", test.to_string());
+
+    let test2 = test1.copy()?;
+    println!(
+        "test2 shaep:{:?}, stride:{:?}, is_contiguous:{}",
+        test2.shape(),
+        test2.stride(),
+        test2.is_contiguous()
+    );
     // println!("{} {:?}", test.to_string(), test.stride());
     // let src = Tensor::arange(0u32, 2, &device)?
     //     .reshape((2, 1))?
@@ -91,5 +99,28 @@ fn test_copy() -> candle::Result<()> {
     //     last.shape(),
     //     last.stride()
     // );
+    Ok(())
+}
+
+#[test]
+fn test_copy1() -> candle::Result<()> {
+    let device = candle::Device::Cpu;
+
+    let test = Tensor::zeros((2, 10), DType::U32, &device)?;
+    let test1 = test.narrow(1, 0, 5)?;
+    println!(
+        "test1 shaep:{:?}, stride:{:?}, is_contiguous:{}",
+        test1.shape(),
+        test1.stride(),
+        test1.is_contiguous()
+    );
+
+    let test2 = test1.copy()?;
+    println!(
+        "test2 shaep:{:?}, stride:{:?}, is_contiguous:{}",
+        test2.shape(),
+        test2.stride(),
+        test2.is_contiguous()
+    );
     Ok(())
 }

@@ -153,6 +153,8 @@ fn apply_top_k_top_p(
     let dim = logits.shape().dims().len() - 1;
     let (logits_sort, logits_idx) =
         tops::cuda_sort_(logits, dim, false, arena, std::ptr::null_mut())?;
+    // tracing::info!("####logits_sort:{}", logits_sort.to_string());
+    // tracing::info!("####logits_idx:{}", logits_idx.to_string());
     // Apply top-k
     let vocab_size = logits_sort.dims()[1];
     let top_k_mask = Tensor::new(vocab_size as i64, k.device())?;
@@ -828,15 +830,8 @@ pub struct Sampler {
 }
 
 impl Sampler {
-    pub fn new(
-        _max_batch: usize,
-        _max_model_len: usize,
-        _dtype: DType,
-        device: &Device,
-    ) -> candle::Result<Self> {
+    pub fn new(device: &Device) -> candle::Result<Self> {
         Ok(Self {
-            // base_tensor_buffer,
-            // cache,
             arena: TensorArena::new(device),
         })
     }
@@ -891,6 +886,7 @@ impl Sampler {
         // # Use in-place division to avoid creating a new tensor.
         let temperatures = sampling_tensors.temperatures.unsqueeze(1)?;
         let mut logits = logits.broadcast_div(&temperatures)?;
+
         // tracing::info!("#######logits result{:?}", logits.to_string());
         // cuda_dev.synchronize();
         // tracing::info!("sample 1.5 cost {:?}, {}", start.elapsed(), do_min_p);
@@ -909,6 +905,7 @@ impl Sampler {
                 sampling_tensors.top_ks,
             )?;
         }
+
         if do_min_p {
             logits = apply_min_p(&mut self.arena, logits, sampling_tensors.min_ps)?;
         }

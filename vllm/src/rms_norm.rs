@@ -39,13 +39,22 @@ pub struct RmsNorm {
 }
 
 impl RmsNorm {
-    pub fn load<S: Into<Shape>>(s: S, eps: f64, vb: candle_nn::VarBuilder) -> candle::Result<Self> {
+    pub fn load<S: Into<Shape>>(
+        s: S,
+        eps: f64,
+        adjust: Option<f64>,
+        vb: candle_nn::VarBuilder,
+    ) -> candle::Result<Self> {
         let normalized_shape = s.into();
-        let weight = vb.get(
+        let mut weight = vb.get(
             normalized_shape.dims(),
             "weight",
             // candle_nn::Init::Const(1.),
         )?;
+        if let Some(adjust) = adjust {
+            weight = (weight + adjust)?;
+        }
+        //weight+
         Ok(Self {
             weight,
             _normalized_shape: normalized_shape,

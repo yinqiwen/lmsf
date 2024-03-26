@@ -341,6 +341,36 @@ fn test_narrow() -> candle::Result<()> {
     Ok(())
 }
 
+fn print_gpu_mem(prefix: &str) {
+    let (before_free, _) = candle::cuda_backend::cudarc::driver::result::mem_get_info().unwrap();
+    println!("{}:gpu free:{} KB", prefix, before_free / 1024);
+}
+#[test]
+fn test_drop() -> candle::Result<()> {
+    let device = candle::Device::new_cuda(0).unwrap();
+    let cuda_dev = match &device {
+        Device::Cuda(c) => c,
+        _ => {
+            candle::bail!("unexpected!")
+        }
+    };
+    cuda_dev.synchronize();
+    print_gpu_mem("init");
+    let test = Tensor::rand(1_f32, 10.0, (4096, 4096), &device)?;
+    cuda_dev.synchronize();
+    print_gpu_mem("after create tensor1");
+
+    let test1 = Tensor::zeros_like(&test)?;
+    cuda_dev.synchronize();
+    print_gpu_mem("after create tensor2");
+
+    drop(test1);
+    cuda_dev.synchronize();
+    print_gpu_mem("after drop tensor1");
+
+    Ok(())
+}
+
 #[test]
 fn test_varbb() -> candle::Result<()> {
     let device = candle::Device::new_cuda(0).unwrap();
@@ -364,14 +394,55 @@ fn test_varbb() -> candle::Result<()> {
 fn test_safetensor() -> candle::Result<()> {
     let _device = candle::Device::new_cuda(0).unwrap();
 
-    let model_weight_files = vec!["/data2/models/Llama-2-13B-chat-AWQ/model.safetensors"];
-    let tensors = unsafe { candle::safetensors::MmapedSafetensors::new(model_weight_files[0])? };
+    let model_weight_files = vec![
+        "/data2/models/chatglm3-6b/model-00001-of-00007.safetensors",
+        "/data2/models/chatglm3-6b/model-00002-of-00007.safetensors",
+        "/data2/models/chatglm3-6b/model-00003-of-00007.safetensors",
+        "/data2/models/chatglm3-6b/model-00004-of-00007.safetensors",
+        "/data2/models/chatglm3-6b/model-00005-of-00007.safetensors",
+        "/data2/models/chatglm3-6b/model-00006-of-00007.safetensors",
+        "/data2/models/chatglm3-6b/model-00007-of-00007.safetensors",
+    ];
+    let tensors = unsafe { candle::safetensors::MmapedSafetensors::multi(&model_weight_files)? };
+    let tensors = tensors.tensors();
+    for (k, t) in tensors {
+        println!("{:?}", k);
+        // if k == "transformer.encoder.layers.1.mlp.dense_h_to_4h.weight" {
+        //     println!("###{:?}", t.shape());
+        // }
+    }
+    Ok(())
+}
+#[test]
+fn test_sqrt() -> candle::Result<()> {
+    let head_dim = 1000;
+    let x = 1. / ((head_dim as f32).sqrt());
+    println!("####{}", x);
+    Ok(())
+}
 
-    let t0 = tensors.get("model.layers.1.self_attn.q_proj.qweight")?;
-    println!("{:?}/{:?}", t0.dtype(), t0.shape());
+#[test]
+fn test_safetensor1() -> candle::Result<()> {
+    let device = candle::Device::new_cuda(0).unwrap();
 
-    let t1 = tensors.get("model.layers.0.input_layernorm.weight")?;
-    println!("{:?}/{:?}", t1.dtype(), t1.shape());
+    let model_weight_files = vec![
+        "/data2/models/chatglm3-6b/model-00001-of-00007.safetensors",
+        "/data2/models/chatglm3-6b/model-00002-of-00007.safetensors",
+        "/data2/models/chatglm3-6b/model-00003-of-00007.safetensors",
+        "/data2/models/chatglm3-6b/model-00004-of-00007.safetensors",
+        "/data2/models/chatglm3-6b/model-00005-of-00007.safetensors",
+        "/data2/models/chatglm3-6b/model-00006-of-00007.safetensors",
+        "/data2/models/chatglm3-6b/model-00007-of-00007.safetensors",
+    ];
+    let vb = unsafe {
+        candle_nn::VarBuilder::from_mmaped_safetensors(&model_weight_files, DType::BF16, &device)?
+    };
+    let t0 = vb
+        .pp("model.layers.0.input_layernorm")
+        .get(2048_usize, "weight")?
+        .to_dtype(DType::F16)?; // failed to get tensor with wrong dtype
+    let t0 = (t0 + 1.0)?;
+    println!("{:?}/{:?}/{}", t0.dtype(), t0.shape(), t0.to_string());
 
     Ok(())
 }

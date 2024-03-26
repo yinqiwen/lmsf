@@ -135,6 +135,8 @@ impl LinearWeights for AWQLinearWeights {
     }
 
     fn get_descs(
+        input_size_per_partition: usize,
+        output_size_per_partition: usize,
         input_size: usize,
         output_size: usize,
         params_dtype: DType,
@@ -143,7 +145,11 @@ impl LinearWeights for AWQLinearWeights {
         let pack_factor = config.pack_factor;
         let group_size = config.group_size;
 
-        let qweight_shape = Shape::from_dims(&[input_size, output_size / pack_factor]);
+        let qweight_shape = Shape::from_dims(&[
+            input_size_per_partition,
+            output_size_per_partition / pack_factor,
+        ]);
+        let qweight_full_shape = Shape::from_dims(&[input_size, output_size / pack_factor]);
         let qweight_attrs = HashMap::from([
             ("input_dim", 0_usize),
             ("output_dim", 1),
@@ -151,7 +157,12 @@ impl LinearWeights for AWQLinearWeights {
             ("pack_factor", pack_factor),
         ]);
 
-        let qzero_shape = Shape::from_dims(&[input_size / group_size, output_size / pack_factor]);
+        let qzero_shape = Shape::from_dims(&[
+            input_size_per_partition / group_size,
+            output_size_per_partition / pack_factor,
+        ]);
+        let qzero_full_shape =
+            Shape::from_dims(&[input_size / group_size, output_size / pack_factor]);
         let qzero_attrs = HashMap::from([
             ("input_dim", 0_usize),
             ("output_dim", 1),
@@ -159,7 +170,11 @@ impl LinearWeights for AWQLinearWeights {
             ("pack_factor", pack_factor),
         ]);
 
-        let scales_shape = Shape::from_dims(&[input_size / group_size, output_size]);
+        let scales_shape = Shape::from_dims(&[
+            input_size_per_partition / group_size,
+            output_size_per_partition,
+        ]);
+        let scales_full_shape = Shape::from_dims(&[input_size / group_size, output_size]);
         let scales_attrs = HashMap::from([
             ("input_dim", 0_usize),
             ("output_dim", 1),
@@ -167,9 +182,27 @@ impl LinearWeights for AWQLinearWeights {
             // ("pack_factor", pack_factor),
         ]);
         vec![
-            WeightRegistry::new("qweight", qweight_shape, DType::U32, qweight_attrs),
-            WeightRegistry::new("qzeros", qzero_shape, DType::U32, qzero_attrs),
-            WeightRegistry::new("scales", scales_shape, params_dtype, scales_attrs),
+            WeightRegistry::new(
+                "qweight",
+                qweight_shape,
+                qweight_full_shape,
+                DType::U32,
+                qweight_attrs,
+            ),
+            WeightRegistry::new(
+                "qzeros",
+                qzero_shape,
+                qzero_full_shape,
+                DType::U32,
+                qzero_attrs,
+            ),
+            WeightRegistry::new(
+                "scales",
+                scales_shape,
+                scales_full_shape,
+                params_dtype,
+                scales_attrs,
+            ),
         ]
     }
 

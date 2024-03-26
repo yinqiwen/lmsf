@@ -9,7 +9,6 @@
 #include <algorithm>
 
 namespace vllm {
-
 // TODO(woosuk): Further optimize this kernel.
 template <typename scalar_t>
 __global__ void

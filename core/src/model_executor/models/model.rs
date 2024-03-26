@@ -2,7 +2,6 @@ use anyhow::Result;
 use candle::DType;
 use candle::Tensor;
 
-
 use super::ModelType;
 use crate::model_executor::input_metadata::InputMetadata;
 
@@ -33,7 +32,7 @@ pub trait ModelConfig: std::fmt::Debug + Send + Sync {
         None
     }
     fn get_vocab_size(&self) -> usize;
-    fn get_bos_token_id(&self) -> u32;
+    // fn get_bos_token_id(&self) -> u32;
     fn get_eos_token_id(&self) -> u32;
 }
 

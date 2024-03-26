@@ -1,5 +1,5 @@
 use anyhow::anyhow;
-use candle::Device;
+use candle::{DType, Device};
 use std::{
     collections::{HashMap, HashSet},
     str::FromStr,
@@ -11,6 +11,8 @@ use super::{
     template::ChatTemplate,
 };
 use crate::model_executor::layers::UnquantizedLinearWeights;
+use crate::model_executor::models::chatglm::{ChatGLMModel, GLMConfig};
+use crate::model_executor::models::gemma::{Gemma, GemmaConfig};
 use crate::model_executor::models::llama::{Llama, LlamaConfig};
 use crate::model_executor::{
     layers::{
@@ -43,6 +45,8 @@ pub enum QuantizeType {
 #[strum(ascii_case_insensitive)]
 pub enum ModelType {
     LLAMA,
+    GEMMA,
+    CHATGLM,
 }
 
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
@@ -112,10 +116,16 @@ impl ModelFactory {
     pub fn load_model(
         dir: &str,
         quantize_type: Option<QuantizeType>,
+        convert_dtype: Option<DType>,
         cfg: &dyn ModelConfig,
         model_weight_files: &Vec<String>,
         device: &Device,
     ) -> anyhow::Result<Box<dyn Model>> {
+        let load_dtype = if let Some(dtype) = convert_dtype {
+            dtype
+        } else {
+            cfg.get_dtype()?
+        };
         let preinit_model = || -> anyhow::Result<_> {
             let is_pth = str::ends_with(model_weight_files[0].as_str(), ".pt");
             let is_safetensors = str::ends_with(model_weight_files[0].as_str(), ".safetensors");
@@ -124,34 +134,32 @@ impl ModelFactory {
                 if is_safetensors {
                     candle_nn::VarBuilder::from_mmaped_safetensors(
                         model_weight_files,
-                        cfg.get_dtype()?,
+                        load_dtype,
                         &device,
                     )?
                 } else if is_pth {
                     candle_nn::VarBuilder::from_pth(
                         model_weight_files[0].as_str(),
-                        cfg.get_dtype()?,
+                        load_dtype,
                         &device,
                     )?
                 } else {
                     panic!("Not supported model format:{:?}", model_weight_files)
                 }
             };
-            let _dtype = cfg.get_dtype()?;
-            let cfg_any = cfg.as_any();
-            let llama_cfg = match cfg_any.downcast_ref::<LlamaConfig>() {
-                Some(b) => b,
-                None => panic!("not LlamaConfig"),
-            };
             let cache = Cache::new(vb.device())?;
             let parallel_state = ParallelState::default();
-            Ok((vb, llama_cfg, cache, parallel_state))
+            Ok((vb, cache, parallel_state))
         };
 
         match cfg.get_model_type() {
             ModelType::LLAMA => match quantize_type {
                 None => {
-                    let (vb, llama_cfg, cache, parallel_state) = preinit_model()?;
+                    let (vb, cache, parallel_state) = preinit_model()?;
+                    let llama_cfg = match cfg.as_any().downcast_ref::<LlamaConfig>() {
+                        Some(b) => b,
+                        None => panic!("not LlamaConfig"),
+                    };
                     let llama = Llama::<UnquantizedLinearWeights>::load(
                         vb,
                         &cache,
@@ -162,7 +170,11 @@ impl ModelFactory {
                     Ok(Box::new(llama))
                 }
                 Some(QuantizeType::AWQ) => {
-                    let (vb, llama_cfg, cache, parallel_state) = preinit_model()?;
+                    let (vb, cache, parallel_state) = preinit_model()?;
+                    let llama_cfg = match cfg.as_any().downcast_ref::<LlamaConfig>() {
+                        Some(b) => b,
+                        None => panic!("not LlamaConfig"),
+                    };
                     let awq_config = AWQConfig::load(dir)?;
 
                     let llama = Llama::<AWQLinearWeights>::load(
@@ -227,6 +239,30 @@ impl ModelFactory {
                   //     Ok(Box::new(model))
                   // }
             },
+            ModelType::GEMMA => {
+                let (vb, cache, parallel_state) = preinit_model()?;
+                let gemma_cfg = match cfg.as_any().downcast_ref::<GemmaConfig>() {
+                    Some(b) => b,
+                    None => panic!("not GemmaConfig"),
+                };
+                let gemma = Gemma::load(vb, &cache, gemma_cfg, &parallel_state)?;
+                Ok(Box::new(gemma))
+            }
+            ModelType::CHATGLM => {
+                let (vb, cache, parallel_state) = preinit_model()?;
+                let glm_cfg = match cfg.as_any().downcast_ref::<GLMConfig>() {
+                    Some(b) => b,
+                    None => panic!("not GemmaConfig"),
+                };
+                let glm = ChatGLMModel::<UnquantizedLinearWeights>::load(
+                    vb,
+                    &cache,
+                    glm_cfg,
+                    &parallel_state,
+                    None,
+                )?;
+                Ok(Box::new(glm))
+            }
         }
     }
     pub fn new_model_config(
@@ -279,6 +315,20 @@ impl ModelFactory {
                   //     Ok(Box::new(llama_cfg))
                   // }
             },
+            ModelType::GEMMA => {
+                let gemma_cfg: GemmaConfig = serde_json::from_str(&config_data).map_err(|e| {
+                    tracing::error!("Failed to parse GemmaConfig with error:{:?}", e);
+                    e
+                })?;
+                Ok(Box::new(gemma_cfg))
+            }
+            ModelType::CHATGLM => {
+                let glm_cfg: GLMConfig = serde_json::from_str(&config_data).map_err(|e| {
+                    tracing::error!("Failed to parse GLMConfig with error:{:?}", e);
+                    e
+                })?;
+                Ok(Box::new(glm_cfg))
+            }
         }
     }
     pub fn get_chat_template(model_path: &str) -> anyhow::Result<Option<ChatTemplate>> {

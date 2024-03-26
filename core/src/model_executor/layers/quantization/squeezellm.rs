@@ -101,6 +101,8 @@ impl LinearWeights for SqueezeLLMLinearWeights {
     }
 
     fn get_descs(
+        input_size_per_partition: usize,
+        output_size_per_partition: usize,
         input_size: usize,
         output_size: usize,
         params_dtype: DType,
@@ -108,7 +110,9 @@ impl LinearWeights for SqueezeLLMLinearWeights {
     ) -> Vec<WeightRegistry> {
         let pack_factor = config.pack_factor;
 
-        let qweight_shape = Shape::from_dims(&[input_size, output_size]);
+        let qweight_shape =
+            Shape::from_dims(&[input_size_per_partition, output_size_per_partition]);
+        let qweight_full_shape = Shape::from_dims(&[input_size, output_size]);
         let qweight_attrs = HashMap::from([
             ("input_dim", 0_usize),
             ("output_dim", 1),
@@ -121,9 +125,16 @@ impl LinearWeights for SqueezeLLMLinearWeights {
         let lookup_table_attrs = HashMap::from([("output_dim", 0)]);
 
         vec![
-            WeightRegistry::new("qweight", qweight_shape, DType::U32, qweight_attrs),
+            WeightRegistry::new(
+                "qweight",
+                qweight_shape,
+                qweight_full_shape,
+                DType::U32,
+                qweight_attrs,
+            ),
             WeightRegistry::new(
                 "lookup_table",
+                lookup_table_shape.clone(),
                 lookup_table_shape,
                 params_dtype,
                 lookup_table_attrs,

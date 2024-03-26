@@ -5,7 +5,8 @@ use candle::{DType, Shape};
 #[derive(Debug)]
 pub struct WeightRegistry {
     pub(crate) name: &'static str,
-    pub(crate) shape: Shape,
+    pub(crate) full_shape: Shape,
+    pub(crate) shard_shape: Shape,
     pub(crate) dtype: DType,
     attrs: HashMap<&'static str, usize>,
 }
@@ -13,13 +14,20 @@ pub struct WeightRegistry {
 impl WeightRegistry {
     pub fn new(
         name: &'static str,
-        shape: Shape,
+        shard_shape: Shape,
+        full_shape: Shape,
         dtype: DType,
         attrs: HashMap<&'static str, usize>,
     ) -> Self {
+        // let full_shape = if let Some(s) = full_shape {
+        //     s
+        // } else {
+        //     shard_shape.clone()
+        // };
         Self {
             name,
-            shape,
+            shard_shape,
+            full_shape,
             dtype,
             attrs,
         }

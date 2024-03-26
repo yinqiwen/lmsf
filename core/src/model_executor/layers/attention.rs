@@ -62,8 +62,6 @@ impl PagedAttention {
         } else {
             candle::bail!("no cuda device")
         };
-        // let cache_ops = CacheOps::new(cuda_device)?;
-        // let attention_ops = PagedAttentionOps::new(cuda_device)?;
         let num_kv_heads = num_key_value_heads.unwrap_or(num_attention_heads);
         let num_queries_per_kv = num_attention_heads / num_kv_heads;
         let alibi_slopes = if let Some(alibi_slopes) = alibi_slopes {
@@ -72,6 +70,7 @@ impl PagedAttention {
             None
         };
         let cache = Cache::new(device)?;
+
         Ok(Self {
             num_attention_heads,
             head_dim,
@@ -118,10 +117,11 @@ impl PagedAttention {
             .transpose(1, 2)?;
 
         let key = key
-            .reshape((batch_size, seq_len, self.num_attention_heads, self.head_dim))?
+            .reshape((batch_size, seq_len, self.num_kv_heads, self.head_dim))?
             .transpose(1, 2)?;
+
         let value: Tensor = value
-            .reshape((batch_size, seq_len, self.num_attention_heads, self.head_dim))?
+            .reshape((batch_size, seq_len, self.num_kv_heads, self.head_dim))?
             .transpose(1, 2)?;
         let key = self.repeat_kv(key)?;
         // let key = self.repeat_kv(key)?;
@@ -181,9 +181,13 @@ impl PagedAttention {
             // );
         }
         let (batch_size, seq_len, hidden_size) = query.shape().dims3()?;
+
         let query = query.reshape(((), self.num_attention_heads, self.head_dim))?;
+
         let key = key.reshape(((), self.num_kv_heads, self.head_dim))?;
+
         let value = value.reshape(((), self.num_kv_heads, self.head_dim))?;
+
         if key_cache.as_ref().is_some_and(|_| value_cache.is_some()) {
             let slot_mapping = input_metadata.slot_mapping.flatten_all()?;
             // candle_paged_attention::reshape_and_cache(
@@ -224,6 +228,7 @@ impl PagedAttention {
                 }
             }
         };
+
         output.reshape((batch_size, seq_len, hidden_size))
     }
 

@@ -14,7 +14,7 @@ async fn async_run(args: &EngineArgs) -> anyhow::Result<()> {
         .with_temperature(0.8)
         .with_top_k(5)
         .with_presence_penalty(0.2)
-        .with_max_tokens(128);
+        .with_max_tokens(16);
 
     // let sampling_params = SamplingParams::default()
     //     .with_beam_search()

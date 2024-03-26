@@ -31,7 +31,6 @@ fn get_cos_sin_cache(
 #[derive(Debug, Clone)]
 pub struct RotaryEmbedding {
     head_size: usize,
-    num_key_value_heads: usize,
     rotary_dim: usize,
     max_position_embeddings: usize,
     rope_theta: f32,
@@ -76,7 +75,6 @@ impl RotaryEmbedding {
         device: &Device,
         dtype: DType,
         head_size: usize,
-        num_key_value_heads: usize,
         rotary_dim: usize,
         max_position_embeddings: usize,
         rope_theta: f32,
@@ -99,15 +97,10 @@ impl RotaryEmbedding {
 
         Ok(Self {
             head_size,
-            num_key_value_heads,
             rotary_dim,
             max_position_embeddings,
             rope_theta,
             is_neox: is_neox_style,
-            // pos_encoding,
-            // cos_sin_cache,
-            // cos,
-            // sin,
             cos_sin_cache: get_cos_sin_cache(
                 10000f32,
                 rotary_dim,
@@ -150,8 +143,7 @@ fn test_() -> candle::Result<()> {
     println!("before q:{}", q.to_string());
     println!("before k:{}", k.to_string());
     let position = Tensor::from_slice(&[9_i64], (1, 1), &cuda_dev)?;
-    let rotary_emb =
-        RotaryEmbedding::new(&cuda_dev, DType::F16, 128, 4096, 128, 4096, 10000.0, true)?;
+    let rotary_emb = RotaryEmbedding::new(&cuda_dev, DType::F16, 128, 128, 4096, 10000.0, true)?;
     rotary_emb.forward(&position, &q, &k)?;
     println!("after q:{}", q.to_string());
     println!("after k:{}", k.to_string());
